@@ -2,7 +2,7 @@
 
 <ul>
   <li>
-    <strong><a href="path/to/A1_PR_LEE_MADDIE.Rmd">Project 1 – Pokemon Card Price Predictors</a>:</strong>
+    <strong><a href="A1_PR_LEE_MADDIE.Rmd">Project 1 – Pokemon Card Price Predictors</a>:</strong>
     This project explores predictive modeling to estimate Pokémon card prices using regression techniques and feature engineering.
   </li>
   <li>
