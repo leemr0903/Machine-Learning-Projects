@@ -39,6 +39,11 @@
 </p>
 
 <p>
+  <strong><a href="FitLife360Case_LEE_MADDIE.Rmd">FitLife360 Case Study</a></strong><br>
+  This case study evaluates the effectiveness of a marketing campaign by analyzing app download data before and after treatment in select cities. The analysis incorporates counterfactual modeling using control groups to estimate the true treatment effect while accounting for underlying trends in control cities. The project refines impact estimates by comparing prediction models with and without key covariates, demonstrating how control-based adjustments can improve inference. Modeling approaches included predictive modeling and post-period estimation based on time-series trends.
+</p>
+
+<p>
   <strong><a href="A7_LEE_MADDIE.Rmd">Predicting Income Using Census Data</a></strong><br>
   This project uses U.S. Census data to predict whether an individual earns more than $50,000 per year. The dataset includes demographic and occupational attributes such as age, education, work class, and final weight. The analysis applies decision tree models, neural networks, and regression to evaluate predictive accuracy and identify key income-related factors. Attention is given to model complexity and generalization to ensure robust and interpretable results that could inform policy or business decisions.
 </p>
