@@ -1,0 +1,264 @@
+---
+title: "FitLife 360 Case"
+author: "Maddie Lee"
+date: "2024-10-20"
+output: 
+  html_document:
+    number_sections: no
+    toc: yes
+editor_options: 
+  chunk_output_type: inline
+execute:
+  warning: false
+  message: false
+---
+
+# read and explore data
+```{r message=FALSE, warning=FALSE}
+options(rgl.useNULL = TRUE)
+library(rminer)
+library(rmarkdown)
+library(tidyverse) 
+library(dplyr)
+library(DescTools)
+library(lubridate)
+library(gt)
+library(rpact)
+library(MatchIt)
+library(marginaleffects)
+library(quickmatch)
+library(fixest)
+library(zoo)
+library(CausalImpact)
+library(GeoLift)
+```
+
+```{r load and explore data, warning=FALSE}
+#set working directory to downloads
+cloud_wd <- "/Users/madelinelee/Downloads"
+setwd(cloud_wd)
+
+offline <- read.csv(file = "offline_marketing_360.csv", stringsAsFactors = FALSE)
+
+# Create time variable
+offline$date <- as.Date(offline$date)
+
+# Factor chr variables as needed
+offline$treated <- as.factor(offline$treated)
+offline$post <- as.factor(offline$post)
+
+
+str(offline)
+head(offline)
+```
+
+# Q1: Time Series Plot
+
+Plot the time series data.
+
+```{r time series plot}
+
+# Plot the data
+ggplot() +
+  geom_line(data = offline, aes(x = date, y = downloads, color = city)) +
+  labs(title = "App Downloads Over Time: Post-Treatment Period for Denver vs Control Cities",
+       x = "Date", y = "Downloads") +
+  theme_minimal() +
+  scale_color_manual(values = c("Denver" = "blue", "San Francisco" = "green", "Seattle" = "orange", "Los Angeles" = "purple"))
+
+```
+
+
+# Q2: DiD Denver Treatment Effect
+
+Use DiD to estimate the treatment effect in Denver.
+
+```{r DiD Estimate}
+# DiD model
+did_model <- lm(downloads ~ treated * post + city + date, data = offline)
+did_ate <- coef(did_model)["treated1:post1"]
+did_ate
+
+```
+DiD estimated treatment effect: 5.38
+
+# Q3: CasualImpact Denver Treatment Effect
+
+Estimate the treatment effect in Denver with CausalImpact. Do not use any covariate series for this analysis.
+
+```{r data wide}
+(offline_wide <- offline |>
+  filter(city == "Denver") |>
+  select(-treated, -city) |>
+  left_join(
+    (offline |>
+      filter(city != "Denver") |>
+      mutate(total_downloads = downloads) |>
+      select(-downloads, -treated, -post)),
+    by = "date") |>
+  pivot_wider(
+    id_cols = c(date, downloads, post),
+    names_from = city,
+    values_from = total_downloads ,
+    names_prefix = "downloads_")) |>
+  gt()
+
+names(offline_wide)
+
+```
+
+
+```{r CasualImpact}
+response <- filter(offline, city == "Denver")$downloads
+dates <- filter(offline, city == "Denver")$date 
+
+data <- zoo(response, dates)
+
+# Subset the data for CausalImpact (Denver only)
+pre <- as.Date(c("2021-07-01", "2021-07-14"))
+post <- as.Date(c("2021-07-15", "2021-08-01"))
+
+impact <- CausalImpact(data, pre, post) 
+
+summary(impact)
+plot(impact)
+```
+
+
+Estimate the treatment effect in Denver with CausalImpact: 8
+
+# Q4: CasualImpact Denver Treatment Effect w/ Control Cities
+
+Estimate treatment effect in Denver with CausalImpact using downloads from the control cities—San Francisco, Seattle and Los Angeles—as covariate time series. How does the estimate change?
+
+1.  Fit the model for the pre-intervention period (post = 0).
+
+```{r pre intervention model}
+# fit the model 
+(pre_model <- lm(downloads ~ `downloads_San Francisco` + downloads_Seattle + `downloads_Los Angeles`, data = filter(offline_wide, post == 0)))
+
+```
+
+2.  Use the model to forecast for the treatment period (post = 1)
+
+```{r predict post}
+# add the predictions for the post period to the data.  
+offline_wide <- offline_wide |>
+  mutate(predicted = c(filter(offline_wide, post == 0)$downloads, 
+                       predict(pre_model, newdata = filter(offline_wide, post == 1))))
+```
+
+3.  Visualize the forecasts vs. observed in the treatment period
+
+```{r plot forecast vs observed}
+# Plot the counterfactual against the actual post period sales
+ggplot(offline_wide , aes(date, downloads)) +
+  geom_line() +
+  geom_line(aes(date, predicted), col = 2) +
+  theme_minimal() +
+  geom_vline(xintercept = as.Date("2021-07-15"), lty = 2)+
+  labs(title = "Predicted downloads (red) vs. actual downloads (black) in the treatment period",
+       subtitle = "Intervention begins on July 15 (black dashed line)")
+
+
+```
+
+The synthetic control treatment effect will be the average of the observed minus the counterfactual in the treatment period:
+
+```{r synthetic control treatment effect}
+mean(filter(offline_wide, post == 1)$downloads - 
+       predict(pre_model, newdata = filter(offline_wide, post == 1)))
+```
+The synthetic control treatment effect: 4.12
+
+```{r CasualImpact w/ Covariate}
+
+# format data to be a multivariate time series object
+(data_cov <- zoo(select(offline_wide, -date, -post, -predicted), offline_wide$date))
+
+# fit model using same pre and post
+impact <- CausalImpact(data_cov, pre, post) 
+
+summary(impact)
+plot(impact)
+
+```
+
+
+Estimate treatment effect in Denver with CausalImpact using downloads from the control cities: 4.5. 
+
+Using downloads from the control cities decreases the estimated treatment effect from 8 to 4.5. You can see by comparing the first panel in both impact plots that the counterfactual prediction for the post-treatment period fits the actual data better in the second model that adds the covariate. This leads to a refined estimate of the treatment effect by accounting for trends in the control cities, potentially reducing bias in the results.
+
+# Q5: GeoLift Denver Treatment Effect
+
+Fit a GeoLift model (using the GeoLift() function) and output the model summary. How does the results differ from those obtained with CausalImpact?
+
+1.  Read in and format the data
+
+```{r data change}
+(geo_data <- GeoDataRead(data = offline,
+                    date_id = "date",
+                    location_id = "city", 
+                    Y_id = "downloads",
+                    X = c(), # no covariates aside from product above
+                    format = "yyyy-mm-dd",
+                    summary = TRUE)) |>
+  gt()
+```
+
+2.  Plot the data. 
+
+```{r plot}
+GeoPlot(geo_data,
+        Y_id = "Y",
+        time_id = "time",
+        location_id = "location")
+```
+
+3.  Create GeoLift model. 
+
+```{r model}
+offline |> 
+  filter(city == "Denver") |> 
+  mutate(time = 1:n()) |>
+  filter(post == 1) |>
+  gt() 
+
+(gl_model <- GeoLift(Y_id = "Y", 
+        locations = c("Denver"), 
+        treatment_start_time = 15,
+        treatment_end_time = 32, 
+        data = geo_data,
+        alpha = .05,
+        stat_test = "Positive"))
+```
+GeoLift Average Estimated Treatment Effect (ATT): 5.06. 
+
+The GeoLift model estimates the treatment effect in Denver by using geographic uplift. The results are similar to the CausalImpact analysis with covairate, but the ATT is slightly higher at 5.06 compared to 4.5.     
+
+# Q6: GeoLift Plot
+
+Plot the GeoLift model.  
+
+```{r GeoLift Plot}
+plot(gl_model, type = "ATT", treatment_end_date = "2012-08-01")
+```
+
+
+# Q7: Summary
+
+
+**FitLife’s Single City Offline Marketing Intervention: Summary**
+
+FitLife's multi-channel offline marketing campaign in Denver led to a positive impact on app downloads, as confirmed by several methods:
+
+1. **Synthetic Control**: Estimated the treatment effect at **4.12**, using control cities to create a synthetic version of Denver.
+2. **Difference-in-Differences (DiD)**: Estimated the treatment effect at **5.38**, comparing Denver's download trends with control cities before and after the intervention.
+3. **CausalImpact (No Covariates)**: Estimated the treatment effect at **8**, comparing Denver’s post-intervention period with its pre-treatment forecast.
+4. **CausalImpact (With Covariates)**: Using control cities as covariates, the treatment effect was refined to **4.5**.
+5. **GeoLift**: Estimated the average treatment effect (ATT) at **5.06**, using a geographic uplift approach.
+
+All methods indicate a significant positive effect, with the estimated treatment effect ranging from **4.12 to 8**, confirming that the campaign successfully increased downloads in Denver.
+
+
+
