@@ -1,0 +1,488 @@
+---
+title: "Assignment 3 SVM: Classifying Wine Scores"
+author: "Maddie Lee"
+date: "2024-10-22"
+output: 
+  html_document:
+    number_sections: no
+    toc: yes
+editor_options: 
+  chunk_output_type: inline
+execute:
+  warning: false
+  message: false
+---
+
+# Introduction
+
+__Perspective:__ \ 
+
+A wine production company could use the wine quality data to improve production processes, marketing strategies, and customer satisfaction. By predicting wine quality based on physicochemical properties (like acidity, pH, sugar content, etc.), the company can ensure consistent product quality and optimize resources.
+
+__Analysis:__ \ 
+Model Overview: An SVM model can be trained using the historical wine quality data (based on physicochemical properties) to predict a binary target variable (e.g., high quality vs. low quality). This classification would help the business decide how to handle each batch of wine.
+
+By building an SVM model with the available data, the company can predict whether a batch of wine will be classified as high-quality or low-quality.
+
+__Question:__ \ 
+
+Can we predict whether a batch of wine will be of high or low quality before production is complete?  
+  
+* Question: Can the quality of a wine batch be predicted based on the initial chemical analysis (i.e., acidity, pH, sulfates) before bottling?  
+
+__Possible Business Impact:__ \   
+
+* Proactive Quality Control: If a batch is predicted to be low quality, the company can intervene early, adjusting production parameters (e.g., adding more sulfur dioxide or modifying fermentation temperature) to improve quality before bottling.    
+* Cost Efficiency: Resources, such as premium bottling and marketing budgets, can be allocated more efficiently if the company knows early on which batches will likely be high quality (and thus sold at a higher price point) and which will be lower quality (to be sold in less competitive markets).    
+* Inventory Management: Predicting quality helps the company make better decisions about how much of each type of wine to produce, based on demand forecasts and potential revenue.    
+
+
+__Data Source and Description:__ \ 
+
+Data: Wine Quality
+Source: <https://archive.ics.uci.edu/dataset/186/wine+quality>
+
+1. Title: Wine Quality 
+
+2. Sources
+   Created by: Paulo Cortez (Univ. Minho), Antonio Cerdeira, Fernando Almeida, Telmo Matos and Jose Reis (CVRVV) @ 2009
+   
+3. Past Usage:
+
+  P. Cortez, A. Cerdeira, F. Almeida, T. Matos and J. Reis. 
+  Modeling wine preferences by data mining from physicochemical properties.
+  In Decision Support Systems, Elsevier, 47(4):547-553. ISSN: 0167-9236.
+
+  In the above reference, two data sets were created, using red and white wine samples.
+  The inputs include objective tests (e.g. PH values) and the output is based on sensory data
+  (median of at least 3 evaluations made by wine experts). Each expert graded the wine quality 
+  between 0 (very bad) and 10 (very excellent). 
+ 
+4. Relevant Information:
+
+   The two data sets are related to red and white.
+   For more details, consult: http://www.vinhoverde.pt/en/ or the reference [Cortez et al., 2009].
+   Due to privacy and logistic issues, only physicochemical (inputs) and sensory (the output) variables 
+   are available (e.g. there is no data about grape types, wine brand, wine selling price, etc.).
+
+   The classes are ordered and not balanced (e.g. there are munch more normal wines than
+   excellent or poor ones).
+
+5. Number of Instances: red wine - 1599; white wine - 4898. 
+
+6. Number of Attributes: 11 + output attribute
+  
+
+7. Attribute information:
+
+| Variable              | Data Type | Description                                                              | Independent/Dependent |
+|-----------------------|-----------|--------------------------------------------------------------------------|-----------------------|
+| fixed.acidity          | Numeric   | Acids that do not evaporate easily (tartaric acid), adds tartness to wine | Independent           |
+| volatile.acidity       | Numeric   | Acids that evaporate easily (mainly acetic acid), gives a vinegar taste   | Independent           |
+| citric.acid            | Numeric   | Weak organic acid, adds freshness to wine                                 | Independent           |
+| residual.sugar         | Numeric   | Amount of sugar remaining after fermentation, impacts wine sweetness      | Independent           |
+| chlorides              | Numeric   | Salt content in the wine, high levels cause salty taste                   | Independent           |
+| free.sulfur.dioxide    | Numeric   | SO₂ that is available to prevent spoilage and oxidation                   | Independent           |
+| total.sulfur.dioxide   | Numeric   | Total SO₂ (free and bound), acts as a preservative                       | Independent           |
+| density                | Numeric   | Wine’s density, related to sugar and alcohol content                      | Independent           |
+| pH                     | Numeric   | Acidity/alkalinity of wine, lower values mean higher acidity              | Independent           |
+| sulfates              | Numeric   | Enhances wine's stability, antimicrobial properties, excessive leads to bitterness | Independent           |
+| alcohol                | Numeric   | Alcohol content (% by volume), influences the body and warmth of the wine | Independent           |
+| wine_type              | Factor    | Type of wine (red or white)                                               | Independent           |
+| quality                | Integer   | Quality score based on sensory evaluation (scale 0-10)                    | Dependent             |
+
+
+8. Missing Attribute Values: None
+
+
+__Conclusions:__
+
+The SVM with RBF kernel is the better model overall if we want to be able to predict high quality wines.
+
+* Higher Accuracy (84.21%) compared to the linear model (80.46%).
+* Much better sensitivity (39.11% vs. 0.52%), meaning the RBF model is far more capable of identifying high-quality wines.
+* Better balanced accuracy (0.6713 vs. 0.5020), meaning it handles both classes (high- and low-quality wines) more effectively.
+* Kappa score is significantly higher for the RBF model (0.4055), showing that it makes better predictions than random guessing.
+
+Yes, the quality of a wine batch can be predicted based on the initial chemical analysis, such as acidity, pH, and sulfates, before bottling. The model achieves high accuracy (84.21%) and is particularly effective in identifying low-quality wines (specificity of 95.16%).
+ 
+
+__Limitations:__
+
+* Limited scope of variables: 
+  * The data only includes only physicochemical (inputs) and not other important factors that might affect wine quality (e.g. there is no data about grape types, wine brand, wine selling price, etc.).  
+* Subjective rating system:
+  * Quality of the data is a rating given by wine experts. kernel is subjective and expert scoring does not always match consumer preferences. It might not be the best indication of demand for a company. 
+* Imbalance of red/white wine: 
+  * The number of red wines in the dataset is greater than 2x the number of whites. The model might be better at predicting quality scores for red wines than white. 
+* Data does not include a date/time variable: 
+  * Wine production changes by years of grape growth/harvest. We are limited to the time the data set was made. 
+* Data covers limited geography:
+  * The wine sample contains variants of the Portuguese "Vinho Verde" wine. With the data pool being small, it might not be generalizable to other wine geographies such as France or the United States. 
+* Subjective division of wine into "Low" and "High" scores: 
+  * I created the categories of "Low" and "High" for the model to be binary, but there are many that fit into more of the middle scores. 
+* Model sensitivity: 
+  * The RBF Kernel model’s sensitivity is relatively low (39.11%), meaning it misses a large portion of the actual high-quality wines. 
+
+
+__Assumptions and Robustness Checks:__
+
+* Data separability: 
+  * I created models with both a linear kernel and non linear kernel to see how best the data was separated
+* Feature scaling: 
+  * All continuous variables were scaled 
+* Multicollinearity: 
+  * There are a few variables that are highly correlated and were noted in the numeric predictors section. If more time was allowed, future analysis could include variable selection to remove the variables with high collinearity. 
+* Kernel choice: 
+  * I explored both linear vs. non-linear kernels and tested different values to tune the appropriate kernel parameters 
+* Class balance: 
+  * "Low" and "High" appeared to have a good class balance. The only major predictor with imbalance is the white and red wine differences noted in limitations. 
+* Regularization (C) and kernel parameter (gamma or sigma) tuning:
+  * I used cross-validation to find the optimal values for my hyper parameters.
+
+
+
+# Load Required Libraries
+
+```{r message=FALSE, warning=FALSE}
+# Load necessary libraries
+options(rgl.useNULL = TRUE)
+library(dataPreparation)
+library(mlbench)
+library(glmnet)  
+library(caret)   
+library(dplyr)   
+library(rminer)
+library(rmarkdown)
+library(tidyverse) 
+library(DescTools)
+library(ggplot2)
+library(lubridate)
+library(rpact)
+library(MatchIt)
+library(marginaleffects)
+library(quickmatch)
+library(car)
+library(corrplot)
+library(ROCR)
+library(psych)
+library(faraway)
+library(lmtest)
+library(tseries)
+library(forecast)
+library(reshape2)
+library(kernlab)
+library(e1071)
+```
+
+# Read Data
+```{r load datasets, warning=FALSE}
+# Load data sets and clean variables
+cloud_wd <- "/Users/madelinelee/Downloads"
+setwd(cloud_wd)
+
+# Load the red and white wine data sets
+red_wine <- read.csv("winequality-red.csv", sep = ";")
+white_wine <- read.csv("winequality-white.csv", sep = ";")
+
+# Add a column to indicate the wine type
+red_wine$wine_type <- "red"
+white_wine$wine_type <- "white"
+
+# Combine the data sets
+wine_data <- rbind(red_wine, white_wine)
+
+# factor wine type
+wine_data$wine_type <- as.factor(wine_data$wine_type)
+
+head(wine_data)
+str(wine_data)
+```
+# EDA
+```{r data summary}
+summary(wine_data)
+```
+## Numeric Predictors
+```{r numeric predictors}
+# Melt the data set to long format for easier plotting of all numeric predictors
+wine_long <- melt(wine_data[,1:11])
+
+# Plot histograms for each numeric variable
+ggplot(wine_long, aes(x = value)) + 
+  geom_histogram(bins = 30, fill = "skyblue", color = "black") +
+  facet_wrap(~variable, scales = "free_x") + 
+  labs(title = "Distribution of Each Numeric Predictor", x = "Value", y = "Frequency") +
+  theme_minimal()
+# Calculate correlation matrix
+cor_matrix <- cor(wine_data[,1:11])
+
+# Plot correlation matrix using ggplot2
+library(reshape2)
+melted_cor <- melt(cor_matrix)
+ggplot(data = melted_cor, aes(x=Var1, y=Var2, fill=value)) + 
+  geom_tile() + 
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white", 
+                       midpoint = 0, limit = c(-1,1), space = "Lab", 
+                       name="Correlation") +
+  theme_minimal()
+
+# Create a correlation matrix for all numeric predictors
+cor_matrix <- cor(wine_data[,1:11])
+
+# Display the correlation matrix
+print(cor_matrix)
+
+
+```
+
+
+Strong right skew in residual.sugar, free.sulfur.dioxide, and total.sulfur.dioxide.  
+Slight right skew in sulfates, alcohol, and citric.acid. 
+
+Strong negative correlation between pH and fixed.acidity r = -.68 (the acidity of a substance impacts the overall pH so to be expected). 
+
+
+Strong positive correlation between citric.acid and fixed.acidity r = .67 (citric acid is an acid and will impact overall acidic levels). 
+Strong positive correlation between free.sulfur.dioxide and total.sulfur.dioxide r = .67 ( free sulfur dioxide + bound sulfur dioxide = total sulfur.  dioxide)
+Strong positive correlation between density and fixed.acidity r = .67 (The density of the wine is closely related to its alcohol and sugar content. Higher density typically indicates higher residual sugar levels.)
+
+
+## Target Distribution
+```{r target distribution}
+# Plot the distribution of wine quality
+ggplot(wine_data, aes(x = quality)) + 
+  geom_bar(fill = "skyblue") +
+  labs(title = "Distribution of Wine Quality", x = "Quality", y = "Count")
+```
+It appears that wine quality scores are approximately normally distributed with more midpoint wines than outlier wines. 
+
+
+## Categorical Predictors
+```{r target distribution for red and white wine}
+# Create a bar plot showing the distribution of wine quality by wine type
+ggplot(wine_data, aes(x = factor(quality), fill = wine_type)) +
+  geom_bar(position = "dodge") +
+  labs(title = "Distribution of Wine Quality by Wine Type", 
+       x = "Wine Quality Score", 
+       y = "Count",
+       fill = "Wine Type") +
+  theme_minimal()
+```
+Large majority of the data is white wine (red wine - 1599; white wine - 4898), but similar proportion of scores between the two wine types. 
+
+
+
+# Feature Engineering 
+```{r target variable}
+# Create binary target variable: high quality (quality >= 6) -> 1, otherwise -> 0
+wine_data$quality <- ifelse(wine_data$quality <= 6, 0, 1)
+wine_data$quality <- as.factor(wine_data$quality)
+
+```
+
+
+## New Target Distribution w/ Numeric Variables
+```{r target distribution with numeric variables}
+# Create boxplots for each numeric predictor against the quality
+ggplot(wine_data, aes(x = factor(quality), fill = factor(quality))) +
+  geom_boxplot(aes(y = fixed.acidity)) + 
+  labs(title = "Boxplot of Fixed Acidity by Quality Class", 
+       x = "Quality Class (0 = Low, 1 = High)", 
+       y = "Fixed Acidity") +
+  theme_minimal()
+
+ggplot(wine_data, aes(x = factor(quality), fill = factor(quality))) +
+  geom_boxplot(aes(y = volatile.acidity)) + 
+  labs(title = "Boxplot of Volatile Acidity by Quality Class", 
+       x = "Quality Class (0 = Low, 1 = High)", 
+       y = "Volatile Acidity") +
+  theme_minimal()
+
+ggplot(wine_data, aes(x = factor(quality), fill = factor(quality))) +
+  geom_boxplot(aes(y = citric.acid)) + 
+  labs(title = "Boxplot of Citric Acid by Quality Class", 
+       x = "Quality Class (0 = Low, 1 = High)", 
+       y = "Citric Acid") +
+  theme_minimal()
+
+ggplot(wine_data, aes(x = factor(quality), fill = factor(quality))) +
+  geom_boxplot(aes(y = residual.sugar)) + 
+  labs(title = "Boxplot of Residual Sugar by Quality Class", 
+       x = "Quality Class (0 = Low, 1 = High)", 
+       y = "Residual Sugar") +
+  theme_minimal()
+
+ggplot(wine_data, aes(x = factor(quality), fill = factor(quality))) +
+  geom_boxplot(aes(y = chlorides)) + 
+  labs(title = "Boxplot of Chlorides by Quality Class", 
+       x = "Quality Class (0 = Low, 1 = High)", 
+       y = "Chlorides") +
+  theme_minimal()
+
+ggplot(wine_data, aes(x = factor(quality), fill = factor(quality))) +
+  geom_boxplot(aes(y = free.sulfur.dioxide)) + 
+  labs(title = "Boxplot of Free Sulfur Dioxide by Quality Class", 
+       x = "Quality Class (0 = Low, 1 = High)", 
+       y = "Free Sulfur Dioxide") +
+  theme_minimal()
+
+ggplot(wine_data, aes(x = factor(quality), fill = factor(quality))) +
+  geom_boxplot(aes(y = total.sulfur.dioxide)) + 
+  labs(title = "Boxplot of Total Sulfur Dioxide by Quality Class", 
+       x = "Quality Class (0 = Low, 1 = High)", 
+       y = "Total Sulfur Dioxide") +
+  theme_minimal()
+
+ggplot(wine_data, aes(x = factor(quality), fill = factor(quality))) +
+  geom_boxplot(aes(y = density)) + 
+  labs(title = "Boxplot of Density by Quality Class", 
+       x = "Quality Class (0 = Low, 1 = High)", 
+       y = "Density") +
+  theme_minimal()
+
+ggplot(wine_data, aes(x = factor(quality), fill = factor(quality))) +
+  geom_boxplot(aes(y = pH)) + 
+  labs(title = "Boxplot of pH by Quality Class", 
+       x = "Quality Class (0 = Low, 1 = High)", 
+       y = "pH") +
+  theme_minimal()
+
+ggplot(wine_data, aes(x = factor(quality), fill = factor(quality))) +
+  geom_boxplot(aes(y = sulphates)) + 
+  labs(title = "Boxplot of Sulphates by Quality Class", 
+       x = "Quality Class (0 = Low, 1 = High)", 
+       y = "Sulphates") +
+  theme_minimal()
+
+ggplot(wine_data, aes(x = factor(quality), fill = factor(quality))) +
+  geom_boxplot(aes(y = alcohol)) + 
+  labs(title = "Boxplot of Alcohol by Quality Class", 
+       x = "Quality Class (0 = Low, 1 = High)", 
+       y = "Alcohol") +
+  theme_minimal()
+
+```
+Largest differences between low and high class observed in boxplots:
+
+* "High" class wines have a lower on average volatile acidity than "Low" class wines
+* "High" class wines have a lower on average density than "Low" class wines
+* "High" class wines have a higher average alcohol content compared to "Low" class wines
+
+# Splitting the Data into Training and Test Sets
+
+```{r data partition}
+# Split the data into training and testing sets
+set.seed(123)  # For reproducibility
+split = .7
+train_index <- sample(1:nrow(wine_data), split *  nrow(wine_data))
+test_index <- setdiff(1:nrow(wine_data), train_index)
+
+
+# Create separate columns for predictors (X) and outcome (Y) variables
+
+# For the training set
+X_train_unscaled <- wine_data[train_index, -12]
+y_train <- wine_data[train_index, 12]
+
+
+# For the test set
+X_test_unscaled <- wine_data[test_index, -12]
+y_test <- wine_data[test_index, 12]
+
+# Standardize continuous variables (as needed)
+
+# Preprocess the data to scale and center
+preProcValues_train <- preProcess(X_train_unscaled, method = c("center", "scale"))
+
+# Apply the scaling to the data set
+X_train <- predict(preProcValues_train, X_train_unscaled)
+
+# Preprocess the data to scale and center
+preProcValues_test <- preProcess(X_test_unscaled, method = c("center", "scale"))
+
+# Apply the scaling to the data set
+X_test <- predict(preProcValues_test, X_test_unscaled)
+
+
+# If necessary, rename the levels of Y_train to valid R variable names
+y_train <- factor(y_train, levels = c(1, 0), labels = c("High", "Low"))
+length(y_train)
+
+# Also do the same for Y_test
+y_test <- factor(y_test, levels = c(1, 0), labels = c("High", "Low"))
+length(y_test)
+
+train_data <- cbind(y_train, X_train)
+nrow(train_data)
+length(train_data$y_train)
+
+
+```
+
+# Train + Test the Model
+
+
+## Linear Kernel
+```{r train data linear}
+# Define the grid with values for C (no need for sigma in linear kernel)
+grid <- expand.grid(C = c(0.1, 1, 10, 100))  # Regularization parameter for linear SVM
+
+# Train Control
+fitControl <- trainControl(method = "repeatedcv",   # Cross-validation
+                           number = 5,
+                           classProbs = TRUE,  # To compute ROC
+                           summaryFunction = twoClassSummary)  # ROC for binary classification
+
+# Train the linear SVM model
+svmFit1 <- train(y_train ~ ., data = train_data, method = "svmLinear",  #method to svmLinear
+                 trControl = fitControl, metric = "ROC", verbose = FALSE, 
+                 tuneGrid = grid)
+
+# Check model results
+svmFit1
+
+# Plot ROC with different values of C (since no sigma is used)
+ggplot(svmFit1)
+
+# Make predictions on the test set
+svmPred <- predict(svmFit1, newdata = X_test, probability = TRUE)
+
+# Evaluate the model using confusion matrix
+confusionMatrix(data = svmPred, as.factor(y_test))
+
+
+```
+
+## Non Linear Kernel
+```{r train data svmRadial, warning=FALSE }
+# Define the grid with values for sigma and C
+grid <- expand.grid(sigma = c(0.001, 0.01, 0.05, 0.1),  # Kernel parameter
+                    C = c(0.1, 1, 10, 100))    
+
+
+# Train Control
+fitControl <- trainControl(method = "repeatedcv",   # Cross-validation
+                           number = 3,
+                           repeats = 2, # 5-fold cross-validation
+                           classProbs = TRUE,  # To compute ROC
+                           summaryFunction = twoClassSummary)  # ROC for binary classification
+
+
+svmFit2 <- train(y_train ~ ., data = train_data, method = "svmRadial",
+                 trControl = fitControl, metric = "ROC", verbose = FALSE, probability = TRUE,
+                 tuneGrid = grid)
+# Create plot of ROC with different values of C and gamma
+svmFit2
+ggplot(svmFit2)
+
+svmPred_2 <- predict(svmFit2, newdata = X_test, probability = TRUE)
+
+confusionMatrix(data = svmPred_2, as.factor(y_test))
+
+```
+
+
+
+
+
+

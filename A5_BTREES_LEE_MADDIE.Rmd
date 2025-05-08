@@ -1,0 +1,781 @@
+---
+title: "Machine Learning Assignment 5 Bagging and Boosting"
+author: "Maddie Lee"
+date: "2024-11-05"
+output: 
+  html_document:
+    number_sections: no
+    toc: yes
+editor_options: 
+  chunk_output_type: inline
+execute:
+  warning: false
+  message: false
+---
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+# Load necessary libraries
+options(rgl.useNULL = TRUE)
+library(dataPreparation)
+library(mlbench)
+library(glmnet)  
+library(knitr)
+library(caret)   
+library(dplyr)   
+library(rminer)
+library(rmarkdown)
+library(tidyverse) 
+library(DescTools)
+library(ggplot2)
+library(lubridate)
+library(tidymodels)
+library(Ckmeans.1d.dp)
+library(rpact)
+library(MatchIt)
+library(marginaleffects)
+library(quickmatch)
+library(kableExtra)
+library(car)
+library(vip)
+library(corrplot)
+library(ROCR)
+library(psych)
+library(faraway)
+library(lmtest)
+library(tseries)
+library(forecast)
+library(reshape2)
+library(kernlab)
+library(e1071)
+library(xgboost)
+library(yardstick)
+library(tune)
+library(randomForest)
+library(ggcorrplot)
+```
+
+
+# Introduction
+
+__Perspective:__ \ 
+
+
+Since 2020, I have been working in the mental health field, specifically in residential treatment for at-risk youth. I've always been passionate about mental health and hope to find a role that combines this passion with my skills and expertise in analytics and statistics. This assignment provided a great opportunity to explore mental health datasets and examine the risk factors that may influence overall mental well-being.
+
+For this analysis, I assumed the perspective of a data scientist working for a healthcare organization that specializing in mental health treatment. The goal is to better understand factors influencing mental health outcomes among diverse individuals and provide data-driven insights for targeted interventions. Insights from this analysis can guide mental health advocates and healthcare providers in developing programs that address common stressors and promote mental well-being.
+
+__Analysis:__ \ 
+
+This analysis applies machine learning techniques (specifically boosting and bagging models) to predict whether an individual is likely to report a mental health condition based on various demographic and lifestyle factors. By tuning and comparing the performance of both models, we aim to identify key predictors of mental health conditions, assess model accuracy, and understand the effectiveness of each model. The chosen methods—XGBoost for boosting and Random Forest for bagging—are well-suited for handling complex relationships in structured data and can provide interpretable results on feature importance.
+
+__Question:__ \ 
+
+Question: Can we predict whether an individual is likely to report a mental health condition based on their demographics and lifestyle factors?
+
+__Possible Business Impact:__ \   
+
+Enhanced Program Development and Targeted Interventions:
+
+Description: By identifying key predictors of mental health conditions (e.g., work hours, stress levels, sleep habits), healthcare organizations can design more tailored programs targeting specific risk factors. For example, if long work hours are a significant predictor, interventions promoting work-life balance or stress management could be prioritized.  
+
+Impact: This targeted approach could improve program effectiveness, leading to higher patient satisfaction and better mental health outcomes. Organizations could attract more clients by marketing these personalized, data-driven programs.  
+
+Resource Allocation and Operational Efficiency:
+
+Description: Understanding high-risk demographics and stressors allows healthcare organizations to allocate resources efficiently. For example, if young professionals with high work hours are at greater risk, organizations can focus on outreach programs or specific counseling services for this group.  
+
+Impact: Optimizing resource allocation improves service efficiency, potentially lowering operational costs and allowing providers to serve more clients. This efficiency could also reduce wait times for treatment, improving client experience and retention.
+
+Predictive Screening Tools:
+
+Description: Insights from predictive models can be used to develop screening tools that flag individuals at higher risk for mental health conditions. These tools could be incorporated into healthcare systems, apps, or online assessments, allowing individuals to receive early intervention recommendations.
+
+Impact: Screening tools help detect potential mental health issues before they escalate, allowing for early intervention and preventative care. This proactive approach could lead to reduced healthcare costs and better outcomes, as early interventions are generally more cost-effective than reactive treatments.
+
+__Data Source and Description:__ \ 
+
+Source: [Kaggle](https://www.kaggle.com/datasets/bhadramohit/mental-health-dataset/data)
+
+
+The dataset consists of mental health information for 1000 individuals across various countries, professions, and lifestyles. 
+
+```{r data table, echo=FALSE}
+
+# Create a data frame with variable descriptions
+data_description <- data.frame(
+  Variable = c("Mental_Health_Condition", "Age", "Gender", "Occupation", "Country", 
+               "Severity", "Consultation_History", "Stress_Level", 
+               "Sleep_Hours", "Work_Hours", "Physical_Activity_Hours"),
+  Type = c("Binary", "Numeric", "Categorical", "Categorical", "Categorical", 
+           "Categorical", "Categorical", "Categorical", 
+           "Numeric", "Numeric", "Numeric"),
+  Description = c("Target variable: presence of mental health condition (Yes, No)",
+                  "Age of the individual",
+                  "Gender of the individual (Male, Female, Non-binary)",
+                  "Occupation of the individual (IT, Healthcare, Education, etc.)",
+                  "Country of residence (USA, India, UK, Canada, Australia)",
+                  "Severity of mental health condition (None, Low, Medium, High)",
+                  "Consultation history with a mental health professional (Yes, No)",
+                  "Stress level (Low, Medium, High)",
+                  "Average hours of sleep per day",
+                  "Average hours of work per week",
+                  "Average physical activity hours per week")
+)
+
+# Render the table with kable and add styling with kableExtra
+kable(data_description, 
+      caption = "Table 1: Data Description", 
+      col.names = c("Variable", "Type", "Description"),
+      align = "l") %>%
+  kable_styling(full_width = F, bootstrap_options = c("striped", "hover", "condensed", "responsive")) %>%
+  row_spec(0, bold = TRUE, color = "white", background = "grey") %>%  # Header styling
+  column_spec(1, bold = TRUE) %>%  # Bold the first column
+  column_spec(2, width = "10em") %>%  # Set column width for "Type"
+  column_spec(3, width = "25em")  # Set column width for "Description"
+
+```
+
+
+The dataset contains a mix of categorical and numeric variables, which is ideal for ensemble methods such as Random Forest and XGBoost. Both models can handle categorical and continuous variables effectively.
+
+Random Forest is suitable because it can handle interactions between different predictors and does not require extensive preprocessing (e.g., no need to scale numeric variables or manually encode categorical variables).
+
+XGBoost can be fine-tuned through hyperparameter optimization to improve performance.
+
+
+__Conclusions:__
+
+Based on the analysis, several machine learning models were applied to predict the likelihood of an individual reporting a mental health condition using demographic and lifestyle factors. The comparison of models showed that:
+
+* __Random Forest (Bagging)__ achieved an AUC of 0.523, indicating moderate predictive ability.  
+* __XGBoost without Regularization (Boosting)__ had a similar AUC of 0.521, suggesting that the model struggled to capture distinct patterns without additional tuning.  
+* __XGBoost with Regularization (Boosting)__ outperformed the previous models with an AUC of 0.573, reflecting improved ability to generalize and identify important predictive features.  
+* __XGBoost with Feature Engineering__ yielded an unexpectedly low AUC of 0.005, likely due to issues such as inappropriate feature scaling or misalignment of engineered features.
+
+Among the models tested, __XGBoost with Regularization__ provided the best predictive performance, achieving the highest AUC and demonstrating that regularization was essential for handling the complexity of this dataset. This model, with an AUC of 0.573, indicates a more robust capability for distinguishing between individuals with and without mental health conditions, making it the preferred choice for future predictive applications in mental health risk assessment. Further improvements might include optimizing feature engineering strategies to achieve higher predictive accuracy.
+
+
+__Limitations:__
+
+* The dataset is self-reported, which introduces bias. Individuals may underreport or overreport factors like stress levels, work hours, and physical activity.  
+* The dataset only includes 1000 individuals, which may not be large enough to generalize findings to larger populations.  
+* The kaggle information did not include a time period or source of information found.  
+ 
+
+
+__Assumptions and Robustness Checks:__
+
+Assumptions:
+
+* We assume that the data collected is accurate and representative of the population.  
+* We assume that stress levels and sleep hours are self-reported accurately by the individuals in the dataset.  
+
+Robustness Checks:
+
+* I performed cross-validation to ensure that the model's performance is consistent across different splits of the training data.  
+* Hyperparameter tuning was conducted using a grid search to identify the optimal configuration of model parameters, improving the model’s generalizability.  
+* I compared boosting and bagging models for model performance.  
+* For the boosting models, I did regularization, feature selection, and feature engineering to test for possible model improvements. 
+
+If I had more time I could perform sensitivity analysis to check how changes in key variables (like Stress_Level or Work_Hours) affect model predictions or add additional data sources to compare time periods. I could also explore multiple ensemble methods with stacking or blending.   
+
+
+
+
+# Read Data
+```{r load datasets, warning=FALSE}
+# Load data sets and clean variables
+cloud_wd <- "/Users/madelinelee/Downloads"
+setwd(cloud_wd)
+
+mh <- read.csv("mental_health_dataset.csv")
+
+# Convert categorical variables to factors
+mh <- mh %>%
+  mutate(across(c(Gender, Occupation, Country, Mental_Health_Condition, 
+                  Severity, Consultation_History, Stress_Level), as.factor))
+
+# Remove ID column for analysis
+mh <- mh %>%
+  select(-User_ID)
+
+# Check for missing values
+colSums(is.na(mh))
+
+
+head(mh)
+str(mh)
+```
+# EDA
+
+## Summary Statistics for Numeric and Categorical Variables
+```{r summary stats}
+# Summary for numeric variables
+summary(mh %>% select(Age, Sleep_Hours, Work_Hours, Physical_Activity_Hours))
+
+# Summary for categorical variables
+mh %>%
+  select(Gender, Occupation, Country, Mental_Health_Condition, Severity, Consultation_History, Stress_Level) %>%
+  summarise_all(~n_distinct(.))
+
+```
+## Distribution of Numerical Variables
+
+```{r numeric dist}
+# Histograms for numeric variables
+ggplot(mh, aes(x = Age)) +
+  geom_histogram(binwidth = 5, fill = "blue", color = "white") +
+  labs(title = "Distribution of Age", x = "Age", y = "Frequency")
+
+ggplot(mh, aes(x = Sleep_Hours)) +
+  geom_histogram(binwidth = 1, fill = "green", color = "white") +
+  labs(title = "Distribution of Sleep Hours", x = "Sleep Hours", y = "Frequency")
+
+ggplot(mh, aes(x = Work_Hours)) +
+  geom_histogram(binwidth = 5, fill = "orange", color = "white") +
+  labs(title = "Distribution of Work Hours", x = "Work Hours", y = "Frequency")
+
+ggplot(mh, aes(x = Physical_Activity_Hours)) +
+  geom_histogram(binwidth = 1, fill = "purple", color = "white") +
+  labs(title = "Distribution of Physical Activity Hours", x = "Physical Activity Hours", y = "Frequency")
+
+# Boxplots for numeric variables
+ggplot(mh, aes(y = Age)) +
+  geom_boxplot(fill = "blue") +
+  labs(title = "Boxplot of Age", y = "Age")
+
+ggplot(mh, aes(y = Sleep_Hours)) +
+  geom_boxplot(fill = "green") +
+  labs(title = "Boxplot of Sleep Hours", y = "Sleep Hours")
+
+ggplot(mh, aes(y = Work_Hours)) +
+  geom_boxplot(fill = "orange") +
+  labs(title = "Boxplot of Work Hours", y = "Work Hours")
+
+ggplot(mh, aes(y = Physical_Activity_Hours)) +
+  geom_boxplot(fill = "purple") +
+  labs(title = "Boxplot of Physical Activity Hours", y = "Physical Activity Hours")
+
+```
+
+## Distribution of Categorical Variables
+
+```{r}
+# Bar plots for categorical variables
+ggplot(mh, aes(x = Gender)) +
+  geom_bar(fill = "lightblue") +
+  labs(title = "Distribution of Gender", x = "Gender", y = "Count")
+
+ggplot(mh, aes(x = Occupation)) +
+  geom_bar(fill = "lightgreen") +
+  labs(title = "Distribution of Occupation", x = "Occupation", y = "Count") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+ggplot(mh, aes(x = Stress_Level)) +
+  geom_bar(fill = "gold") +
+  labs(title = "Distribution of Stress Level", x = "Stress Level", y = "Count")
+
+```
+
+
+## Target Distribution and Balance
+```{r target distrubution}
+ggplot(mh, aes(x = Mental_Health_Condition)) +
+  geom_bar(fill = "lightcoral") +
+  labs(title = "Distribution of Mental Health Condition", x = "Mental Health Condition", y = "Count")
+
+mh %>%
+  group_by(Mental_Health_Condition) %>%
+  summarise(Count = n()) %>%
+  mutate(Percentage = (Count / sum(Count)) * 100)
+
+
+```
+Data appears balanced with 48.5% reporting no mental health condition and 51.5% reporting a mental health condition. This means we do not need to adjust for imbalanced data with up or downsampling with training the model.
+
+## Correlation Analysis
+
+```{r numeric correlation}
+numeric_vars <- mh %>% select(Age, Sleep_Hours, Work_Hours, Physical_Activity_Hours)
+correlation_matrix <- cor(numeric_vars)
+ggcorrplot(correlation_matrix, lab = TRUE)
+```
+
+None of the numeric predictors have a strong correlation (all below +- .05)
+
+## Bivariate Analysis
+```{r bivariate}
+# Boxplots to see how numeric variables relate to mental health condition
+ggplot(mh, aes(x = Mental_Health_Condition, y = Age, fill = Mental_Health_Condition)) +
+  geom_boxplot() +
+  labs(title = "Mental Health Condition vs Age", x = "Mental Health Condition", y = "Age")
+
+ggplot(mh, aes(x = Mental_Health_Condition, y = Sleep_Hours, fill = Mental_Health_Condition)) +
+  geom_boxplot() +
+  labs(title = "Mental Health Condition vs Sleep Hours", x = "Mental Health Condition", y = "Sleep Hours")
+
+ggplot(mh, aes(x = Mental_Health_Condition, y = Work_Hours, fill = Mental_Health_Condition)) +
+  geom_boxplot() +
+  labs(title = "Mental Health Condition vs Work Hours", x = "Mental Health Condition", y = "Work Hours")
+
+ggplot(mh, aes(x = Mental_Health_Condition, y = Physical_Activity_Hours, fill = Mental_Health_Condition)) +
+  geom_boxplot() +
+  labs(title = "Mental Health Condition vs Physical Activity Hours", x = "Mental Health Condition", y = "Physical Activity Hours")
+```
+
+
+There seems to be no major differences in numeric predictors between individuals that did and did not report a mental health condition. 
+
+# Data Splitting
+
+```{r data split}
+# Set a seed for reproducibility
+set.seed(123)
+
+# Use createDataPartition to create a training index
+train_index <- createDataPartition(mh$Mental_Health_Condition, p = 0.8, list = FALSE)
+
+# Subset data into training and testing sets
+train_data <- mh[train_index, ]
+test_data <- mh[-train_index, ]
+
+# Display the sizes of each dataset
+cat("Training set size:", nrow(train_data), "\n")
+cat("Testing set size:", nrow(test_data), "\n")
+
+```
+# Bagging
+
+## Model set up w/ Hyperparamter Tuning
+
+```{r bagging}
+# Define the Random Forest model specification with tunable hyperparameters
+rf_spec <- rand_forest(
+  trees = tune(),        # Number of trees
+  mtry = tune(),         # Number of predictors to randomly sample
+  min_n = tune()         # Minimum number of data points in a node
+) %>%
+  set_engine("randomForest") %>%
+  set_mode("classification")
+
+# Define the grid for hyperparameter tuning
+rf_grid <- grid_regular(
+  trees(range = c(200, 500)),
+  mtry(range = c(2, round(sqrt(ncol(train_data))))),
+  min_n(range = c(1, 20)),
+  levels = 10
+)
+
+```
+
+## Recipe for Data Preprocessing
+
+```{r recipe - bagging}
+# Create a recipe for data preprocessing
+rf_recipe <- recipe(Mental_Health_Condition ~ ., data = train_data) %>%
+  step_dummy(all_nominal_predictors()) %>%
+  step_zv(all_predictors())
+```
+
+## Cross-Validation and Hyperparameter Tuning
+
+```{r cv and tuning bagging}
+
+# Set up cross-validation
+folds <- vfold_cv(train_data, v = 5)
+
+# Tune the model with grid search and cross-validation
+rf_res <- tune_grid(
+  rf_spec,
+  preprocessor = rf_recipe,
+  resamples = folds,
+  grid = rf_grid,
+  metrics = metric_set(roc_auc)
+)
+
+# Get the best tuned parameters
+best_rf <- select_best(rf_res, metric = "roc_auc")
+
+
+```
+## Train the Final Model w/ Best Parameters 
+
+```{r train - bagging}
+# Finalize the model with the best hyperparameters
+final_rf <- finalize_model(rf_spec, best_rf)
+
+# Train the model on the full training data
+final_rf_fit <- final_rf %>%
+  fit(Mental_Health_Condition ~ ., data = train_data)
+
+```
+
+## Evaluate the Model on the Test Set
+
+```{r test - bagging}
+# Make predictions on the test set
+rf_predictions <- predict(final_rf_fit, test_data, type = "prob") %>%
+  bind_cols(predict(final_rf_fit, test_data)) %>%
+  bind_cols(test_data %>% select(Mental_Health_Condition))
+
+# Calculate and output accuracy
+accuracy_test <- rf_predictions %>%
+  metrics(truth = Mental_Health_Condition, estimate = .pred_class) %>%
+  filter(.metric == "accuracy")
+
+# Print accuracy
+print(accuracy_test)
+
+
+```
+
+
+
+# XGBoost (Boosting)
+
+## Model set up w/ Hyperparamter Tuning
+
+```{r boosting}
+
+# Define the XGBoost model specification with tunable hyperparameters
+xgb_spec <- boost_tree(
+  trees = tune(), 
+  tree_depth = tune(), 
+  learn_rate = tune(), 
+  loss_reduction = tune(), 
+  sample_size = tune(), 
+  mtry = tune()
+) %>%
+  set_engine("xgboost") %>%
+  set_mode("classification")
+
+# Define the grid for hyperparameter tuning, ensuring each parameter is a dials object
+xgb_grid <- grid_latin_hypercube(
+  trees(range = c(50, 500)),              # Number of trees
+  tree_depth(range = c(3, 10)),            # Depth of each tree
+  learn_rate(range = c(0.01, 0.3)),        # Learning rate
+  loss_reduction(),                        # Minimum loss reduction
+  sample_prop(range = c(0.6, 1.0)),        # Sample proportion for subsampling
+  finalize(mtry(), train_data),            # Number of predictors sampled at each split
+  size = 20     
+)
+
+
+```
+
+## Recipe for Data Preprocessing
+```{r recipe boosting}
+# Create recipe
+xgb_recipe <- recipe(Mental_Health_Condition ~ ., data = train_data) %>%
+  step_dummy(all_nominal_predictors()) %>%
+  step_zv(all_predictors())
+
+```
+
+## Cross-Validation and Hyperparameter Tuning
+
+```{r cv and tuning boost}
+# Set up resampling with cross-validation
+folds <- vfold_cv(train_data, v = 5)
+
+# Tune hyperparameters with grid search, specifying the recipe
+xgb_res <- tune_grid(
+  xgb_spec,
+  preprocessor = xgb_recipe, # use preprocessor for the recipe
+  resamples = folds,
+  grid = xgb_grid,
+  metrics = metric_set(roc_auc)
+)
+
+# Get the best tuned parameters (with named metric argument)
+best_xgb <- select_best(xgb_res, metric = "roc_auc")
+```
+
+## Train the Final Model w/ Best Parameters 
+
+```{r train boost}
+# Finalize the model with the best parameters
+final_xgb <- finalize_model(xgb_spec, best_xgb)
+
+# Train the finalized XGBoost model
+final_xgb_fit <- final_xgb %>%
+  fit(Mental_Health_Condition ~ ., data = train_data)
+```
+
+## Evaluate the Model on the Test Set
+
+```{r test}
+# Make predictions on the test set
+xgb_predictions <- predict(final_xgb_fit, test_data, type = "prob") %>%
+  bind_cols(predict(final_xgb_fit, test_data)) %>%
+  bind_cols(test_data %>% select(Mental_Health_Condition))
+
+# Calculate evaluation metrics
+metrics <- xgb_predictions %>%
+  metrics(truth = Mental_Health_Condition, estimate = .pred_class)
+
+# Calculate confusion matrix metrics (F1, recall, precision)
+conf_mat_metrics <- xgb_predictions %>%
+  conf_mat(truth = Mental_Health_Condition, estimate = .pred_class) %>%
+  summary() %>%
+  filter(.metric %in% c("accuracy", "precision", "recall", "f_meas"))
+
+# Calculate AUC
+roc_auc_score <- xgb_predictions %>%
+  roc_auc(truth = Mental_Health_Condition, .pred_Yes) # Assumes "Yes" is the positive class
+
+# Combine all metrics into a single output
+all_metrics <- bind_rows(metrics, conf_mat_metrics, roc_auc_score)
+
+# Print out all metrics
+print(all_metrics)
+```
+# Boost Model Improvement
+
+
+## Regularization
+
+Try adding regularization to prevent overfitting and improve model performance
+
+```{r regularization}
+xgb_spec_reg <- boost_tree(
+  trees = tune(),
+  tree_depth = tune(),
+  learn_rate = tune(),
+  loss_reduction = tune(),
+  sample_size = tune(),
+  mtry = tune(),
+  min_n = tune()
+) %>%
+  set_engine("xgboost", lambda = 1, alpha = 1) %>%
+  set_mode("classification")
+
+# Define the tuning grid
+xgb_grid_reg <- grid_latin_hypercube(
+  trees(range = c(50, 300)),
+  tree_depth(range = c(3, 10)),
+  learn_rate(range = c(0.01, 0.3)),
+  loss_reduction(),
+  sample_prop(range = c(0.6, 1.0)),
+  finalize(mtry(), train_data),
+  min_n(range = c(1, 10)),
+  size = 20
+)
+
+# Create the recipe for data preprocessing
+xgb_recipe <- recipe(Mental_Health_Condition ~ ., data = train_data) %>%
+  step_dummy(all_nominal_predictors()) %>%
+  step_zv(all_predictors())
+
+# Set up 5-fold cross-validation on the training set
+folds <- vfold_cv(train_data, v = 5)
+
+# Tune the model with cross-validation
+xgb_res_reg <- tune_grid(
+  xgb_spec_reg,
+  preprocessor = xgb_recipe,
+  resamples = folds,
+  grid = xgb_grid_reg,
+  metrics = metric_set(roc_auc)
+)
+
+# Select the best hyperparameters based on AUC
+best_xgb_reg <- select_best(xgb_res_reg, metric = "roc_auc")
+
+# Finalize the model specification with the best hyperparameters
+final_xgb_spec_reg <- finalize_model(xgb_spec_reg, best_xgb_reg)
+
+# Fit the final model on the entire training set
+final_xgb_fit_reg <- final_xgb_spec_reg %>%
+  fit(Mental_Health_Condition ~ ., data = train_data)
+
+# Predict on the training set
+train_predictions <- predict(final_xgb_fit_reg, train_data, type = "prob") %>%
+  bind_cols(predict(final_xgb_fit_reg, train_data)) %>%
+  bind_cols(train_data %>% select(Mental_Health_Condition))
+
+# Predict on the test set
+test_predictions <- predict(final_xgb_fit_reg, test_data, type = "prob") %>%
+  bind_cols(predict(final_xgb_fit_reg, test_data)) %>%
+  bind_cols(test_data %>% select(Mental_Health_Condition))
+
+# Calculate performance metrics on the training set
+train_metrics <- train_predictions %>%
+  metrics(truth = Mental_Health_Condition, estimate = .pred_class) %>%
+  bind_rows(
+    train_predictions %>% roc_auc(truth = Mental_Health_Condition, .pred_Yes),
+    train_predictions %>% precision(truth = Mental_Health_Condition, estimate = .pred_class),
+    train_predictions %>% recall(truth = Mental_Health_Condition, estimate = .pred_class),
+    train_predictions %>% f_meas(truth = Mental_Health_Condition, estimate = .pred_class)
+  )
+
+# Calculate performance metrics on the test set
+test_metrics <- test_predictions %>%
+  metrics(truth = Mental_Health_Condition, estimate = .pred_class) %>%
+  bind_rows(
+    test_predictions %>% roc_auc(truth = Mental_Health_Condition, .pred_Yes),
+    test_predictions %>% precision(truth = Mental_Health_Condition, estimate = .pred_class),
+    test_predictions %>% recall(truth = Mental_Health_Condition, estimate = .pred_class),
+    test_predictions %>% f_meas(truth = Mental_Health_Condition, estimate = .pred_class)
+  )
+
+# Print the metrics
+cat("Training Set Metrics:\n")
+print(train_metrics)
+
+cat("\nTest Set Metrics:\n")
+print(test_metrics)
+
+```
+
+
+## Check Variable Importance
+```{r echo=TRUE}
+# Extract the fitted XGBoost model from the workflow
+final_xgb_model <- extract_fit_engine(final_xgb_fit)
+
+# Calculate variable importance
+importance_matrix <- xgb.importance(model = final_xgb_model)
+
+# Subset to show only the top 20 features
+top_20_importance <- importance_matrix[1:20, ]
+top_20_importance
+
+
+
+```
+
+
+It appears that physical activity, age, work hours, and country USA are the top feature importance with levels of occupation as the lowest.
+
+
+## Binning
+
+Binning numeric variables to improve model performance
+
+
+```{r binning}
+train_data <- train_data %>%
+  mutate(Sleep_Hours_Binned = cut(Sleep_Hours, breaks = c(0, 6, 8, Inf), labels = c("Low", "Medium", "High")))
+train_data <- train_data %>%
+  mutate(Work_Hours_Binned = cut(Work_Hours, breaks = c(0, 40, 60, Inf), labels = c("Low", "Medium", "High")))
+
+test_data <- test_data %>%
+  mutate(Sleep_Hours_Binned = cut(Sleep_Hours, breaks = c(0, 6, 8, Inf), labels = c("Low", "Medium", "High")))
+test_data <- train_data %>%
+  mutate(Work_Hours_Binned = cut(Work_Hours, breaks = c(0, 40, 60, Inf), labels = c("Low", "Medium", "High")))
+```
+
+
+## Drop Less Important Features
+
+Removing less important features can improve generalization by reducing noise and making the model simpler.
+
+```{r drop }
+# Drop the `Country` and `Occupation` columns from train_data
+train_data_reduced <- train_data %>%
+  select(-Consultation_History, -Occupation)
+
+# Similarly, drop the same columns from test_data for consistency
+test_data_reduced <- test_data %>%
+  select(-Consultation_History, -Occupation)
+
+```
+
+## Test improvement
+
+```{r}
+# Define the XGBoost model specification with regularization and tunable hyperparameters
+xgb_spec_optimized <- boost_tree(
+  trees = tune(),
+  tree_depth = tune(),
+  learn_rate = tune(),
+  loss_reduction = tune(),
+  sample_size = tune(),
+  mtry = tune(),
+  min_n = tune()
+) %>%
+  set_engine("xgboost", lambda = 1, alpha = 1) %>%
+  set_mode("classification")
+
+# Define a grid for hyperparameter tuning
+xgb_grid_optimized <- grid_latin_hypercube(
+  trees(range = c(100, 500)),           # Number of trees
+  tree_depth(range = c(5, 10)),         # Depth of trees
+  learn_rate(range = c(0.01, 0.3)),     # Learning rate
+  loss_reduction(),                     # Minimum loss reduction
+  sample_prop(range = c(0.6, 1.0)),     # Row sampling proportion
+  finalize(mtry(), train_data_reduced), # Number of predictors to sample per split
+  min_n(range = c(1, 10)),              # Minimum samples per leaf
+  size = 20                             # Number of combinations
+)
+
+# Create the recipe with feature engineering steps
+xgb_recipe <- recipe(Mental_Health_Condition ~ ., data = train_data_reduced) %>%
+  step_dummy(all_nominal_predictors()) %>%  # Encode categorical variables
+  step_zv(all_predictors()) 
+
+# Set up 5-fold cross-validation on the training set
+folds <- vfold_cv(train_data_reduced, v = 5)
+
+# Tune the model with cross-validation
+xgb_res_optimized <- tune_grid(
+  xgb_spec_optimized,
+  preprocessor = xgb_recipe,
+  resamples = folds,
+  grid = xgb_grid_optimized,
+  metrics = yardstick::metric_set(yardstick::roc_auc, yardstick::accuracy)
+)
+
+# Select the best hyperparameters based on ROC AUC
+best_xgb_optimized <- select_best(xgb_res_optimized, metric = "roc_auc")
+
+# Finalize the model specification with the best hyperparameters
+final_xgb_spec_optimized <- finalize_model(xgb_spec_optimized, best_xgb_optimized)
+
+# Fit the final model on the full training set
+final_xgb_fit_optimized <- final_xgb_spec_optimized %>%
+  fit(Mental_Health_Condition ~ ., data = train_data_reduced)
+
+
+# Predict on the training set
+train_predictions <- predict(final_xgb_fit_optimized, train_data_reduced, type = "prob") %>%
+  bind_cols(predict(final_xgb_fit_optimized, train_data_reduced)) %>%
+  bind_cols(train_data_reduced %>% select(Mental_Health_Condition))
+
+# Predict on the test set
+test_predictions <- predict(final_xgb_fit_optimized, test_data_reduced, type = "prob") %>%
+  bind_cols(predict(final_xgb_fit_optimized, test_data_reduced)) %>%
+  bind_cols(test_data_reduced %>% select(Mental_Health_Condition))
+
+
+
+# Performance metrics on the training set
+train_metrics <- train_predictions %>%
+  metrics(truth = Mental_Health_Condition, estimate = .pred_class) %>%
+  bind_rows(
+    train_predictions %>% roc_auc(truth = Mental_Health_Condition, .pred_Yes),
+    train_predictions %>% precision(truth = Mental_Health_Condition, estimate = .pred_class),
+    train_predictions %>% recall(truth = Mental_Health_Condition, estimate = .pred_class),
+    train_predictions %>% f_meas(truth = Mental_Health_Condition, estimate = .pred_class)
+  )
+
+# Performance metrics on the test set
+test_metrics <- test_predictions %>%
+  metrics(truth = Mental_Health_Condition, estimate = .pred_class) %>%
+  bind_rows(
+    test_predictions %>% roc_auc(truth = Mental_Health_Condition, .pred_Yes),
+    test_predictions %>% precision(truth = Mental_Health_Condition, estimate = .pred_class),
+    test_predictions %>% recall(truth = Mental_Health_Condition, estimate = .pred_class),
+    test_predictions %>% f_meas(truth = Mental_Health_Condition, estimate = .pred_class)
+  )
+
+# Print the metrics for both sets
+cat("Training Set Metrics:\n")
+print(train_metrics)
+
+cat("\nTest Set Metrics:\n")
+print(test_metrics)
+
+```
+
+

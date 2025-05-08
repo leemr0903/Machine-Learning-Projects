@@ -1,0 +1,491 @@
+---
+title: "A2_TS_LEE_MADDIE"
+author: "Maddie Lee"
+date: "2024-10-08"
+output: 
+  html_document:
+    number_sections: no
+    toc: yes
+editor_options: 
+  chunk_output_type: inline
+execute:
+  warning: false
+  message: false
+---
+
+# Introduction
+
+__Perspective:__ \ 
+
+My family have been life long Utah Jazz fans and my husband is a die hard Denver Nuggets fan. The Jazz franchise rarely attracts top talent from current NBA players with top players going to more populated/popular states and cities such as the Lakers, Golden State, and Miami. 
+
+It would be interesting to see if the Jazz could afford a top player and what the estimated contract salary would be to offer.
+
+__Analysis:__ \ 
+
+Time series analysis to predict salary based on player stats with season_start as the time variable. 
+
+__Question:__ \ 
+
+Could we predict a player's future salary amount by the player statistics? 
+
+__Data Source and Description:__ \ 
+
+Data: NBA Players Performance and Salaries
+Source: <https://www.kaggle.com/datasets/thedevastator/exploring-nba-player-performance-and-salaries-19?select=players.csv>
+
+
+Description from website:
+
+This dataset provides a comprehensive look at NBA player salaries and performance from 1985 to 2018. It contains detailed records of salary figures, season information, physical attributes (such as height and weight), draft information, college attended, career stats (including points scored and win shares) and shooting hand preference. This invaluable insight into the financial trajectory of NBA players offers an invaluable resource for academics, fans and professionals alike. With this data in hand one can not only observe how well drafted picks do over time or which type of players command higher salaries but also explore the different strategies employed by teams in pursuit of on-court success without breaking the bank
+
+Data Variables Overview
+
+| Variable         | Description                                      | Data Type    | Role          |
+|------------------|--------------------------------------------------|--------------|---------------|
+| birthDate        | Date of birth of the player                      | Date         | Independent   |
+| birthPlace       | Place of birth of the player                     | String       | Independent   |
+| career_AST       | Career assists of the player                     | Integer      | Independent   |
+| career_FG%       | Career field goal percentage of the player       | Float        | Independent   |
+| career_FG3%      | Career three-point field goal percentage         | Float        | Independent   |
+| career_FT%       | Career free throw percentage of the player       | Float        | Independent   |
+| career_G         | Career games played by the player                | Integer      | Independent   |
+| career_PER       | Career player efficiency rating                  | Float        | Independent   |
+| career_PTS       | Career points scored by the player               | Integer      | Independent   |
+| career_TRB       | Career total rebounds of the player              | Integer      | Independent   |
+| career_WS        | Career win shares of the player                  | Float        | Independent   |
+| career_eFG%      | Career effective field goal percentage           | Float        | Independent   |
+| college          | College attended by the player                   | String       | Independent   |
+| draft_pick       | Draft pick of the player                         | Integer      | Independent   |
+| draft_round      | Round of the draft the player was selected in    | Integer      | Independent   |
+| draft_team       | Team that drafted the player                     | String       | Independent   |
+| draft_year       | Year the player was drafted                      | Integer      | Independent   |
+| height           | Height of the player                             | Float        | Independent   |
+| highSchool       | High school attended by the player               | String       | Independent   |
+| name             | Name of the player                               | String       | Identifier    |
+| position         | Position of the player                           | String       | Independent   |
+| shoots           | Shooting hand preference of the player           | String       | Independent   |
+| weight           | Weight of the player                             | Integer      | Independent   |
+| league           | The league the player is in                      | String       | Independent   |
+| salary           | The salary of the player                         | Integer      | Dependent     |
+| season           | The season the player is playing in              | String       | Independent   |
+| season_end       | The end date of the season                       | Date         | Independent   |
+| season_start     | The start date of the season                     | Date         | Independent   |
+| team             | The team the player is playing for               | String       | Independent   |
+
+The variables in the datasets are suitable for analyzing NBA player salaries and performance over time because it provides comprehensive and relevant information that allows for a detailed exploration of factors affecting player salaries, as well as trends in player performance.
+
+It has a numeric outcome of salary (numeric target) over years (season start). It also has player demographics that directly impact a players performance. We assume a players performance is a good predictor of the annual salary. 
+
+
+__Conclusions:__
+
+Our ARIMA model performance metrics did not indicate great performance in predicting salary based on player stats with the following metrics:  
+
+Model Evaluation Metrics:  
+MSE: 3.467815e+13   
+MAE: 3695230   
+RMSE: 5888816   
+MAPE: 144.3178 %. 
+R-squared: -0.04318597   
+
+__Limitations:__
+
+Possible limitations are they we only have data from 2018 and before. The data does not account for changes in the economy or salary caps that the NBA implemented. In the future, I could run analysis on individual player or position level to predict salaries. 
+
+Our model did produce a negative R squared which could be because of the following: 
+
+Overfitting or Underfitting: If the model is either too complex or too simple for the data, it can lead to poor predictions and a negative R² value.  
+Incorrect model specification: The chosen ARIMA parameters (p, d, q) may not be optimal for the dataset.  
+Highly variable data: If the data has a lot of random noise or variability that the model cannot capture, it can lead to poor model performance.  
+Poor feature selection for external regressors (xreg): If the external regressors used in the model do not correlate well with the target variable, the model may struggle to make accurate predictions.  
+
+
+
+__Assumptions and Robustness Checks:__
+
+* Autocorrelation in Residuals: The Ljung-Box test p-value is greater than 0.05, the residuals are uncorrelated, confirming that the model has captured the time series patterns adequately
+* Normality of Residuals: Data on residuals looks relatively normally distributed 
+* Constant Variance of Residuals: The residual plot shows a random scatter around zero with no discernible pattern or changing variance
+* Stationarity: Augmented Dickey-Fuller Test p-value ≤ 0.05: Reject the null hypothesis. This suggests that the time series is stationary (no unit root).
+* Lasso for predictors: I ran a lasso regression model to see if there were any non significant predictors to remove. The output showed none of the coefficients to be zero so all predictors were kept. 
+* Removing high VIF predictors: There were 3 predictors with VIF > 5. I ran a time series model removing these predictors and the AIC value of the model did not decrease so the model was not adopted. 
+
+# Load Required Libraries
+
+```{r message=FALSE, warning=FALSE}
+# Load necessary libraries
+options(rgl.useNULL = TRUE)
+library(glmnet)  
+library(caret)   
+library(dplyr)   
+library(rminer)
+library(rmarkdown)
+library(tidyverse) 
+library(DescTools)
+library(lubridate)
+library(rpact)
+library(MatchIt)
+library(marginaleffects)
+library(quickmatch)
+library(car)
+library(corrplot)
+library(psych)
+library(faraway)
+library(lmtest)
+library(tseries)
+library(forecast)
+```
+
+# Read Data
+```{r load datasets, warning=FALSE}
+# Load datasets and clean variables
+cloud_wd <- "/Users/madelinelee/Downloads"
+setwd(cloud_wd)
+
+players <- read.csv("players.csv")
+salaries <- read.csv("salaries_1985to2018.csv")
+
+# Change players birthdate to date
+players$birthDate <- as.Date(players$birthDate, format = "%B %d, %Y")
+
+# Convert all columns that include "career" in their names from character to numeric
+players <- players %>%
+  mutate(across(contains("career"), ~ as.numeric(as.character(.))))
+
+# Change draft year to numeric
+players$draft_year <- as.numeric(players$draft_year)
+
+# Convert necessary columns to numeric (height, weight, career stats)
+players$height <- as.numeric(gsub("-", ".", players$height))
+players$weight <- as.numeric(gsub("lb", "", players$weight))
+
+# Remove period at end of col names
+
+# Use gsub to find columns containing "career" and remove trailing "."
+colnames(players) <- gsub("\\.$", "", colnames(players))
+
+head(players)
+str(players)
+
+head(salaries)
+str(salaries)
+```
+
+```{r merge on player id}
+# Rename '_id' in players to 'player_id' to match the salary data if needed
+colnames(players)[colnames(players) == "X_id"] <- "player_id"
+
+
+# Merge the datasets on player_id
+merged_df <- merge(salaries, players, by = "player_id", all = TRUE)
+
+# Inspect the first few rows of the merged dataset
+head(merged_df)
+
+# Remove unnecessary columns
+merged_df <- merged_df %>%
+  select(-c(birthDate, birthPlace, highSchool, name, draft_team))
+
+# Handle missing data by removing rows with missing values
+merged_df <- na.omit(merged_df)
+
+# Check new combined data
+head(merged_df)
+```
+
+# Exploratory Analysis
+
+## Numeric Variables
+```{r numeric predictors}
+# Select only numeric columns from the dataset
+numeric_vars <- merged_df[, sapply(merged_df, is.numeric)]
+
+# Summary statistics for numeric variables
+summary(numeric_vars)
+
+# Plot histograms for numeric variables
+for (col in colnames(numeric_vars)) {
+  p <- ggplot(merged_df, aes_string(x = col)) +
+    geom_histogram(bins = 30, fill = "blue", color = "black") +
+    ggtitle(paste("Histogram of", col)) +
+    theme_minimal() +
+    xlab(col) +
+    ylab("Frequency") +
+    theme(plot.title = element_text(hjust = 0.5))
+  
+  # Explicitly print the plot in the loop
+  print(p)
+}
+
+summary(merged_df$salary)
+summary(merged_df$career_WS)
+```
+Salary highly right skewed with min of 2706 dollars and max of 34,682,550 dollars.
+
+Career_WS highly right skewed with low or -2.7 and high of 273.4.
+
+```{r categorical predictors}
+# Select only categorical columns (factors or character types)
+categorical_vars <- merged_df[, sapply(merged_df, is.factor) | sapply(merged_df, is.character)]
+
+# Summary: frequency counts for each categorical variable and bar plots
+for (col in colnames(categorical_vars)) {
+
+  
+  # Create bar plot for each categorical variable
+  p <- ggplot(merged_df, aes_string(x = col)) +
+    geom_bar(fill = "red", color = "black") +
+    ggtitle(paste("Bar Plot of", col)) +
+    theme_minimal() +
+    xlab(col) +
+    ylab("Count") +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), 
+          plot.title = element_text(hjust = 0.5))
+  
+  # Explicitly print the plot inside the loop
+  print(p)
+}
+```
+Shows a large variety of teams and draft number pick.
+
+Heavily weighed towards right sided players (fits with population of majority right side dominated world population)
+
+# Modeling
+
+Question 1: predict salary based on player stats with season_start as the time variable
+
+## Split the data
+```{r split data into test and train}
+# Split data based on season_start
+train_df <- merged_df %>% filter(season_start <= 2010)
+test_df <- merged_df %>% filter(season_start > 2010)
+
+
+# Check the size of train and test sets
+nrow(train_df)
+nrow(test_df)
+```
+
+## Stationarity 
+
+```{r stationary in salary - season start time variable, warning=FALSE}
+# Perform Augmented Dickey-Fuller (ADF) Test for stationarity
+adf_test <- adf.test(train_df$salary)
+print(adf_test)
+```
+Augmented Dickey-Fuller Test p-value ≤ 0.05: Reject the null hypothesis. This suggests that the time series is stationary (no unit root).
+
+
+## Auto - ARIMA
+
+```{r auto ARIMA}
+# Fit ARIMA model with external regressors
+train_X <- train_df %>% select(career_eFG, career_G, career_PTS, career_AST, career_FG, career_FG3, career_FT,  career_PER,  career_TRB, career_WS,  height, weight)
+test_X <- test_df %>% select(career_eFG, career_G, career_PTS, career_AST, career_FG, career_FG3, career_FT,  career_PER,  career_TRB, career_WS, height, weight)
+
+train_y <- train_df$salary
+test_y <- test_df$salary
+
+# Standardize external regressors
+train_X_scaled <- scale(train_X)
+test_X_scaled <- scale(test_X)
+
+# Use auto.arima to fit the model
+auto_arima_model <- auto.arima(train_y, xreg = as.matrix(train_X_scaled))
+
+# Summary of the model
+summary(auto_arima_model)
+
+```
+
+
+
+## Manual - ARIMA
+
+```{r identify ARIMA p, q, d}
+# Plot ACF and PACF to identify p and q
+acf(diff(train_df$salary), main = "ACF of Salary")
+pacf(diff(train_df$salary), main = "PACF of Salary")
+
+# Manually fit an ARIMA model with specified p, d, q
+p <- 3  # Set based on PACF
+d <- 0  # Differencing order (based on ADF test)
+q <- 1  # Set based on ACF
+
+# Fit ARIMA model with player stats as external regressors
+manual_arima_model <- arima(train_df$salary, order = c(p, d, q), xreg = as.matrix(train_X_scaled))
+
+# Summary of the ARIMA model
+summary(manual_arima_model)
+```
+Since there is only one significant spike at lag 1 in the ACF, the appropriate value for q is likely 1. 
+Since the significant spikes occur up to lag 3, the appropriate value for p is likely 3. 
+Time series is stationary based on ADF test (p-value ≤ 0.05), no differencing is required, and d = 0.
+
+The auto ARIMA (AIC=288802.1) and manual ARIMA (aic = 288808.2) returned similar AIC values so we will continue with the auto ARIMA model ARIMA(4,0,2)
+
+## Predictions and Evaluations
+
+```{r predict data using model}
+# Make predictions on the test data
+predictions <- predict(auto_arima_model, newxreg = as.matrix(test_X_scaled))
+
+
+# Extract the predicted values
+predicted_values <- predictions$pred
+
+# Extract the actual values from the test dataset
+actual_values <- test_y
+
+# 1. Mean Squared Error (MSE)
+mse <- mean((actual_values - predicted_values)^2)
+
+# 2. Mean Absolute Error (MAE)
+mae <- mean(abs(actual_values - predicted_values))
+
+# 3. Root Mean Squared Error (RMSE)
+rmse <- sqrt(mse)
+
+# 4. Mean Absolute Percentage Error (MAPE)
+mape <- mean(abs((actual_values - predicted_values) / actual_values)) * 100
+
+# 5. R-squared (R²)
+sst <- sum((actual_values - mean(actual_values))^2)  # Total sum of squares
+sse <- sum((actual_values - predicted_values)^2)     # Sum of squared errors
+r_squared <- 1 - (sse / sst)
+
+# Print the evaluation metrics
+cat("Model Evaluation Metrics:\n")
+cat("MSE:", mse, "\n")
+cat("MAE:", mae, "\n")
+cat("RMSE:", rmse, "\n")
+cat("MAPE:", mape, "%\n")
+cat("R-squared:", r_squared, "\n")
+```
+# Explore Possible Model Improvements + Robustness Checks
+
+### Check for Multicollinearity
+```{r check for multicollinearity}
+# check VIF values
+vif(lm(train_y ~ ., data = as.data.frame(train_X_scaled)))
+```
+Moderate to high mullticollinearity can be shown in predictors with VIF values of >5.
+
+We see that career_PER (6.95), career_WS (5.87), career_FG (5.56), and career_PTS (5.01). 
+
+### Remove Predictors wit High VIF values
+
+```{r auto ARIMA - reduced}
+# Fit ARIMA model with external regressors
+train_X_reduced <- train_df %>% select(career_eFG, career_G, career_AST,career_FG3, career_FT,  career_TRB,   height, weight)
+test_X_reduced <- test_df %>% select(career_eFG, career_G, career_AST,career_FG3, career_FT,  career_TRB,   height, weight)
+
+# Standardize external regressors
+train_X_reduced_scaled <- scale(train_X_reduced)
+test_X_reduced_scaled <- scale(test_X_reduced)
+
+# Use auto.arima to fit the model
+auto_arima_model_reduced <- auto.arima(train_df$salary, xreg = as.matrix(train_X_reduced_scaled))
+
+# Summary of the model
+summary(auto_arima_model_reduced)
+
+```
+
+Removing predictors with high VIF values/ multicollinearity did not improve the overall model performance (AIC = 289046.1)
+
+### Use Lasso to Select Predictors
+```{r lass predictor selection}
+# Prepare the external regressors (X) and the target variable (y)
+X <- as.matrix(train_X_scaled)  # External regressors matrix (train_X_reduced should include relevant predictors)
+y <- train_df$salary             # Target variable (salary)
+
+
+# Fit the Lasso model using cross-validation
+set.seed(123)  # Set a seed for reproducibility
+lasso_cv <- cv.glmnet(X, y, alpha = 1, family = "gaussian", standardize = TRUE)
+
+# Plot the cross-validation curve
+plot(lasso_cv)
+
+# Best lambda value (with the minimum cross-validation error)
+best_lambda <- lasso_cv$lambda.min
+cat("Best Lambda:", best_lambda, "\n")
+
+# Coefficients of the Lasso model at the best lambda
+lasso_coeffs <- coef(lasso_cv, s = "lambda.min")
+
+# Inspect the coefficients to see which features are selected
+print(lasso_coeffs)
+
+```
+The Lasso model returned all the external regressors as non zero coefficients. 
+
+# Final Model Evaluation 
+
+
+## Residuals
+```{r residuals}
+# Check residuals
+checkresiduals(auto_arima_model)
+
+# Plot residuals
+residuals <- residuals(auto_arima_model)
+hist(residuals, main = "Histogram of Residuals", xlab = "Residuals")
+
+# Ljung-Box test for autocorrelation
+Box.test(auto_arima_model$residuals, type = "Ljung-Box")
+
+```
+
+p-value > 0.05: Fail to reject the null hypothesis, meaning there is no significant autocorrelation in the residuals. This is a good result and suggests that the model has adequately captured the time series structure.
+
+## Vizualize Results
+
+```{r repaste performance metrics}
+# Print the evaluation metrics
+cat("Model Evaluation Metrics:\n")
+cat("MSE:", mse, "\n")
+cat("MAE:", mae, "\n")
+cat("RMSE:", rmse, "\n")
+cat("MAPE:", mape, "%\n")
+cat("R-squared:", r_squared, "\n")
+```
+## Assumptions
+
+```{r autocorrelation in residuals}
+# Get residuals from the ARIMA model
+residuals_arima <- residuals(auto_arima_model)
+
+# Plot ACF and PACF of the residuals
+acf(residuals_arima, main = "ACF of Residuals")
+pacf(residuals_arima, main = "PACF of Residuals")
+```
+The Ljung-Box test p-value is greater than 0.05, the residuals are uncorrelated, confirming that the model has captured the time series patterns adequately
+
+```{r Normality of Residuals}
+# Plot histogram of the residuals
+hist(residuals_arima, main = "Histogram of Residuals", xlab = "Residuals", col = "skyblue", border = "black")
+
+# Plot Q-Q plot of the residuals
+qqnorm(residuals_arima)
+qqline(residuals_arima, col = "red")
+```
+Data on residuals looks relatively normally distributed 
+
+```{r Constant Variance of Residuals}
+# Plot residuals over time
+plot(residuals_arima, type = "l", main = "Residuals Over Time", ylab = "Residuals", xlab = "Time")
+abline(h = 0, col = "red", lty = 2)
+
+# Breusch-Pagan test for heteroscedasticity (requires lmtest package)
+bp_test <- bptest(lm(residuals_arima ~ fitted(auto_arima_model)))
+cat("Breusch-Pagan Test p-value:", bp_test$p.value, "\n")
+
+```
+The residual plot shows a random scatter around zero with no discernible pattern or changing variance
+
+
+
+

@@ -1,0 +1,793 @@
+---
+title: "Pokemon Card Price Predictors"
+author: "Maddie Lee"
+date: "2024-10-08"
+output: 
+  html_document:
+    number_sections: no
+    toc: yes
+editor_options: 
+  chunk_output_type: inline
+execute:
+  warning: false
+  message: false
+---
+# Introduction
+* __Perspective__ \ 
+  * Recently my husband has been going through his things in storage and found multiple cases of different Pokemon cards he had collected when he was younger. We began to research the resale value of some of the cards and noticed that there was a large range based on certain factors. While the earlier edition and special edition cards are worth the most, I wondered if there were certain attributes of each pokemon that also impacted the price of the card. I found data on pricing of cards and a dataset on each pokemon and their characteristics. Going through the data, I decided to look at prices variations for only standard and 1st edition cards as card type makes an impact on the price. 
+  
+* __Questions__ \. 
+
+  
+  * 1. Which Features Most Strongly Influence the Price of a Pokémon Card?  
+    * Objective: Identify the attributes (e.g., HP, attack, defense, generation, type) that have the most influence on the price of a standard Pokémon card.     
+    * Approach: Use Lasso regression, which performs both variable selection and regularization, to determine which features are most significant. By examining the non-zero coefficients in the Lasso model, we can pinpoint the most influential features.   
+
+  * 2. What is the Predicted Price of a Pokémon Card Based on Its Attributes?  
+    * Objective: Develop a model that can predict the price of a Pokémon card based on its characteristics (e.g., type, generation, stats like HP and attack).  
+    * Approach: Use Ridge regression to predict the card price using all available attributes. This can help identify how well we can estimate a card’s price based on its features.\. 
+    
+* __Data Description and Source__
+  * __Pokemon Dataset Description and Source:__
+
+        `name`: The English name of the Pokemon \
+        `japanese_name`: The Original Japanese name of the Pokemon \
+        `pokedex_number`: The entry number of the Pokemon in the National Pokedex \ 
+        `percentage_male`: The percentage of the species that are male. Blank if the Pokemon is genderless.  
+        `type1`: The Primary Type of the Pokemon \
+        `type2`: The Secondary Type of the Pokemon \
+        `classification`: The Classification of the Pokemon as described by the Sun and Moon Pokedex \
+        `height_m`: Height of the Pokemon in meters \ 
+        `weight_kg`: The Weight of the Pokemon in kilograms \ 
+        `capture_rate`: Capture Rate of the Pokemon \
+        `base_egg_steps`: The number of steps required to hatch an egg of the Pokemon \
+        `abilities`: A stringified list of abilities that the Pokemon is capable of having \
+        `experience_growth`: The Experience Growth of the Pokemon \
+        `base_happiness`: Base Happiness of the Pokemon \
+        `against_?`: Eighteen features that denote the amount of damage taken against an attack of a particular type \
+        `hp`: The Base HP of the Pokemon \
+        `attack`: The Base Attack of the Pokemon \
+        `defense`: The Base Defense of the Pokemon \
+        `sp_attack`: The Base Special Attack of the Pokemon \
+        `sp_defense`: The Base Special Defense of the Pokemon \
+        `speed`: The Base Speed of the Pokemon \
+        `generation`: The numbered generation which the Pokemon was first introduced \
+        `is_legendary`: Denotes if the Pokemon is legendary. \ 
+
+    Source: <https://www.kaggle.com/datasets/rounakbanik/pokemon>
+
+    __Card Dataset Description and Source:__
+
+    Data detailing Pokémon trading cards for sale on chaoscards.co.uk. Each record contains a Pokémon, it's card type, the generation, it's card number and the Price of the     card. 
+
+    Source: <https://www.kaggle.com/datasets/jacklacey/pokemon-trading-cards/data> \ 
+    
+* __Independent and Dependent Variables__
+
+| **Variable Name**    | **Type**    | **Description**                                                                                       |
+|----------------------|-------------|-------------------------------------------------------------------------------------------------------|
+| `name`               | Character   | The English name of the Pokémon.                                                                      |
+| `japanese_name`      | Character   | The original Japanese name of the Pokémon.                                                            |
+| `pokedex_number`     | Integer     | The entry number of the Pokémon in the National Pokédex.                                              |
+| `percentage_male`    | Numeric     | The percentage of the species that are male. Blank if the Pokémon is genderless.                      |
+| `type1`              | Character   | The primary type of the Pokémon (e.g., water, fire, grass).                                           |
+| `type2`              | Character   | The secondary type of the Pokémon, if it has one.                                                     |
+| `classification`     | Character   | The classification of the Pokémon as described by the Sun and Moon Pokédex.                           |
+| `height_m`           | Numeric     | The height of the Pokémon in meters.                                                                  |
+| `weight_kg`          | Numeric     | The weight of the Pokémon in kilograms.                                                               |
+| `capture_rate`       | Numeric     | The capture rate of the Pokémon, indicating how difficult it is to catch.                             |
+| `base_egg_steps`     | Integer     | The number of steps required to hatch an egg of the Pokémon.                                          |
+| `abilities`          | Character   | A list of abilities that the Pokémon is capable of having.                                            |
+| `experience_growth`  | Numeric     | The total experience growth of the Pokémon to reach its maximum level.                                |
+| `base_happiness`     | Integer     | The base happiness of the Pokémon.                                                                    |
+| `hp`                 | Integer     | The base health points (HP) of the Pokémon.                                                           |
+| `attack`             | Integer     | The base attack power of the Pokémon.                                                                 |
+| `defense`            | Integer     | The base defense power of the Pokémon.                                                                |
+| `sp_attack`          | Integer     | The base special attack power of the Pokémon.                                                         |
+| `sp_defense`         | Integer     | The base special defense power of the Pokémon.                                                        |
+| `speed`              | Integer     | The base speed of the Pokémon.                                                                        |
+| `generation`         | Integer     | The numbered generation in which the Pokémon was first introduced.                                    |
+| `is_legendary`       | Integer     | Indicates whether the Pokémon is classified as a legendary Pokémon (`1` for legendary, `0` otherwise). |
+| `against_bug`        | Numeric     | The amount of damage taken against a bug-type attack (multiplicative factor).                         |
+| `against_dark`       | Numeric     | The amount of damage taken against a dark-type attack (multiplicative factor).                        |
+| `against_dragon`     | Numeric     | The amount of damage taken against a dragon-type attack (multiplicative factor).                      |
+| `against_electric`   | Numeric     | The amount of damage taken against an electric-type attack (multiplicative factor).                   |
+| `against_fairy`      | Numeric     | The amount of damage taken against a fairy-type attack (multiplicative factor).                       |
+| `against_fight`      | Numeric     | The amount of damage taken against a fighting-type attack (multiplicative factor).                    |
+| `against_fire`       | Numeric     | The amount of damage taken against a fire-type attack (multiplicative factor).                        |
+| `against_flying`     | Numeric     | The amount of damage taken against a flying-type attack (multiplicative factor).                      |
+| `against_ghost`      | Numeric     | The amount of damage taken against a ghost-type attack (multiplicative factor).                       |
+| `against_grass`      | Numeric     | The amount of damage taken against a grass-type attack (multiplicative factor).                       |
+| `against_ground`     | Numeric     | The amount of damage taken against a ground-type attack (multiplicative factor).                      |
+| `against_ice`        | Numeric     | The amount of damage taken against an ice-type attack (multiplicative factor).                        |
+| `against_normal`     | Numeric     | The amount of damage taken against a normal-type attack (multiplicative factor).                      |
+| `against_poison`     | Numeric     | The amount of damage taken against a poison-type attack (multiplicative factor).                      |
+| `against_psychic`    | Numeric     | The amount of damage taken against a psychic-type attack (multiplicative factor).                     |
+| `against_rock`       | Numeric     | The amount of damage taken against a rock-type attack (multiplicative factor).                        |
+| `against_steel`      | Numeric     | The amount of damage taken against a steel-type attack (multiplicative factor).                       |
+| `against_water`      | Numeric     | The amount of damage taken against a water-type attack (multiplicative factor).                       |
+| `price_usd`          | Numeric     | The price of the Pokémon trading card in US dollars (dependent variable).                             |
+
+* __How are your variables suitable for your analysis method?__
+  * The variables used in this analysis are numeric and continuous, making them suitable for Ridge regression. Ridge regression is particularly effective when dealing with multicollinearity, a condition in which predictor variables are highly correlated. 
+* __Conclusions__ 
+  * For standard card types, generation, speed, sp_attack, hp, and sp_defense	were the attributes that most strongly influenced the price of the card according to the lasso model. 
+  * For first edition card types, generation, sp_attack, sp_defense, attack, and weight_kg were the attributes that most strongly influenced the price of the card according to the lasso model. 
+  * The standard card type ridge regression model did not do great at predicting price for the card with an RMSE of 18.01 dollars with the average card price being only 4.34 dollars. This could be due to the large outlier seen in the actual vs. predicted plot shown in the analysis and large right skew of price. 
+  * The first edition card type ridge regression model did not do great at predicting price for the card with an RMSE of 48.05 dollars with the average card price being only 16.90 dollars. This could be due to the large outlier seen in the actual vs. predicted plot shown in the analysis and large right skew of price. 
+  * Overall, it looks like the individual pokemon attributes has less of an effect on the overall price of the card than the card type, generation, and condition would. 
+
+* __Assumptions__
+  * VIF values were used for each model to evaluate potential collinearity. Neither of the models for the stand or 1st edition card price had predictors with VIF values of > 3 so we assume no issues with multicollinearity in the model. 
+  * Both ridge regression models did return low p-values for Shapiro-Wilk Test and Breusch-Pagan Test indicating the violation of normality and homoscedasticity. This could be because of the large skew of prices in the dataset
+  
+* __Limitations__
+  * A limitation in the data that I found contained pricing information of the cards at a certain time. Prices of cards fluctuate over time or when new cards become available. I also did not include other attributes of cards like condition or number in series and instead just broke it down to standard and first edition cards based on the knowledge that I have of pokemon cards.
+  * The standardizing in penalized regression can also cause the model to be complex to interpret and understand thus making it difficult to generalize and apply to other data.
+  * I removed variables that duplicated information or would not be predictive in the model (all `against` variables were removed because it is only comparative to other pokemon type)
+* __Future Analysis__
+  * In the future, I could test price based on the pokemon type, abilities, card generation, and card type. I could also compare prices for legendary vs. non legendary pokemon. 
+
+
+# Read and Explore Data
+
+```{r message=FALSE, warning=FALSE}
+# Load necessary libraries
+options(rgl.useNULL = TRUE)
+library(glmnet)  
+library(caret)   
+library(dplyr)   
+library(rminer)
+library(rmarkdown)
+library(tidyverse) 
+library(DescTools)
+library(lubridate)
+library(rpact)
+library(MatchIt)
+library(marginaleffects)
+library(quickmatch)
+library(car)
+library(corrplot)
+library(psych)
+library(faraway)
+library(lmtest)
+```
+
+```{r load datasets, warning=FALSE}
+# Load datasets
+cloud_wd <- "/Users/madelinelee/Downloads"
+setwd(cloud_wd)
+pokemon <- read.csv("pokemon.csv")
+card <- read.csv("pokemon_cards_clean - sheet1 (1).csv")
+
+head(pokemon)
+str(pokemon)
+
+head(card)
+str(card)
+```
+# Exploratory Analysis
+```{r merge + clean data}
+# Convert all relevant columns to lowercase for joining
+card <- card %>%
+  mutate(name = tolower(Pokemon))
+
+pokemon <- pokemon %>%
+  mutate(name = tolower(name))
+
+# Join the datasets on the name column
+merged_data <- left_join(card, pokemon, by = c("name" = "name"))
+
+# Display the structure of the merged dataset
+str(merged_data)
+
+# Change columns to factors as needed
+merged_data$Card.Type <- as.factor(merged_data$Card.Type)
+merged_data$Generation <- as.factor(merged_data$Generation)
+merged_data$classfication <- as.factor(merged_data$classfication)
+merged_data$type1 <- as.factor(merged_data$type1)
+merged_data$type2 <- as.factor(merged_data$type2)
+merged_data$is_legendary <- as.factor(merged_data$is_legendary)
+
+# Assuming the price in the dataset is in Euros, we will convert it to USD
+# Define a conversion rate: 1 Euro = 1.1 USD 
+euro_to_usd_conversion_rate <- 1.1
+
+# Create a new column for price in dollars
+merged_data <- merged_data %>%
+  mutate(price_usd = round(Price_Euro * euro_to_usd_conversion_rate, 2))
+
+# Check for duplicate rows based on all columns
+duplicates <- duplicated(merged_data)
+
+# View rows that are duplicates
+duplicate_rows <- merged_data[duplicates, ]
+
+# Remove duplicate rows based on all columns
+merged_data <- merged_data %>%
+  distinct()
+
+# Remove duplicate + unwanted columns
+pk <- merged_data %>%
+  select(-Card_Number_Desc, -Card_Num, -Total_Cards, -japanese_name, -pokedex_number, -name, -Price_Euro)
+
+# check cleaned data
+head(pk)
+```
+
+## Numeric Variables
+
+```{r explore numeric variables}
+
+# Analyze 'attack'
+summary(pk$attack)
+ggplot(pk, aes(x = attack)) +
+  geom_histogram(binwidth = 10, fill = "blue", color = "black") +
+  labs(title = "Distribution of Attack", x = "Attack", y = "Frequency") +
+  theme_minimal()
+# Comment: The attack values are normally distributed with a peak around 50-100, indicating most Pokémon have moderate attack values.
+
+# Analyze 'defense'
+summary(pk$defense)
+ggplot(pk, aes(x = defense)) +
+  geom_histogram(binwidth = 10, fill = "blue", color = "black") +
+  labs(title = "Distribution of Defense", x = "Defense", y = "Frequency") +
+  theme_minimal()
+# Comment: Similar to 'attack', defense values are centered around 50-100.
+
+# Analyze 'hp'
+summary(pk$hp)
+ggplot(pk, aes(x = hp)) +
+  geom_histogram(binwidth = 10, fill = "blue", color = "black") +
+  labs(title = "Distribution of HP", x = "HP", y = "Frequency") +
+  theme_minimal()
+# Comment: The HP values also show a normal distribution with a slight skewness to the right.
+
+# Analyze 'base_egg_steps'
+summary(pk$base_egg_steps)
+ggplot(pk, aes(x = base_egg_steps)) +
+  geom_histogram(binwidth = 200, fill = "blue", color = "black") +
+  labs(title = "Distribution of Base Egg Steps", x = "Base Egg Steps", y = "Frequency") +
+  theme_minimal()
+# Comment: Most Pokémon have base egg steps clustered around 5120, which is a common threshold for hatching.
+
+# Analyze 'base_happiness'
+summary(pk$base_happiness)
+ggplot(pk, aes(x = base_happiness)) +
+  geom_histogram(binwidth = 10, fill = "blue", color = "black") +
+  labs(title = "Distribution of Base Happiness", x = "Base Happiness", y = "Frequency") +
+  theme_minimal()
+# Comment: Base happiness values show a bimodal distribution, with many Pokémon having either very low or very high happiness values.
+
+# Analyze 'base_total'
+summary(pk$base_total)
+ggplot(pk, aes(x = base_total)) +
+  geom_histogram(binwidth = 50, fill = "blue", color = "black") +
+  labs(title = "Distribution of Base Total", x = "Base Total", y = "Frequency") +
+  theme_minimal()
+# Comment: The base total shows a normal distribution centered around 450-500, indicating most Pokémon have average total stats.
+
+# Analyze 'experience_growth'
+summary(pk$experience_growth)
+ggplot(pk, aes(x = experience_growth)) +
+  geom_histogram(binwidth = 100000, fill = "blue", color = "black") +
+  labs(title = "Distribution of Experience Growth", x = "Experience Growth", y = "Frequency") +
+  theme_minimal()
+# Comment: Experience growth is skewed to the right, indicating a few Pokémon have significantly higher growth rates compared to others.
+
+# Analyze 'height_m'
+summary(pk$height_m)
+ggplot(pk, aes(x = height_m)) +
+  geom_histogram(binwidth = 0.5, fill = "blue", color = "black") +
+  labs(title = "Distribution of Height (m)", x = "Height (m)", y = "Frequency") +
+  theme_minimal()
+# Comment: Pokémon heights are heavily skewed, with most being relatively short and a few very tall ones.
+
+# Analyze 'percentage_male'
+summary(pk$percentage_male)
+ggplot(pk, aes(x = percentage_male)) +
+  geom_histogram(binwidth = 10, fill = "blue", color = "black") +
+  labs(title = "Distribution of Percentage Male", x = "Percentage Male", y = "Frequency") +
+  theme_minimal()
+# Comment: Percentage of male Pokémon shows a multimodal distribution, with peaks at 0, 50, and 100, reflecting gender ratios in the species.
+
+# Analyze 'sp_attack'
+summary(pk$sp_attack)
+ggplot(pk, aes(x = sp_attack)) +
+  geom_histogram(binwidth = 10, fill = "blue", color = "black") +
+  labs(title = "Distribution of Special Attack", x = "Special Attack", y = "Frequency") +
+  theme_minimal()
+# Comment: Special Attack values are normally distributed, centered around 60-100.
+
+# Analyze 'sp_defense'
+summary(pk$sp_defense)
+ggplot(pk, aes(x = sp_defense)) +
+  geom_histogram(binwidth = 10, fill = "blue", color = "black") +
+  labs(title = "Distribution of Special Defense", x = "Special Defense", y = "Frequency") +
+  theme_minimal()
+# Comment: Special Defense values show a similar distribution to Special Attack, centered around 60-100.
+
+# Analyze 'speed'
+summary(pk$speed)
+ggplot(pk, aes(x = speed)) +
+  geom_histogram(binwidth = 10, fill = "blue", color = "black") +
+  labs(title = "Distribution of Speed", x = "Speed", y = "Frequency") +
+  theme_minimal()
+# Comment: Speed values are normally distributed, with a slight skew to the right indicating a few very fast Pokémon.
+
+
+# Analyze 'generation'
+summary(pk$generation)
+ggplot(pk, aes(x = generation)) +
+  geom_bar(fill = "orange", color = "black") +
+  labs(title = "Distribution of Generation", x = "Generation", y = "Count") +
+  theme_minimal()
+# Comment: Most Pokémon cards belong to the earlier generations, with a gradually decreasing number for newer generations.
+
+
+# Analyze 'price_usd'
+summary(pk$price_usd)
+ggplot(pk, aes(x = price_usd)) +
+  geom_histogram(binwidth = 1, fill = "blue", color = "black") +
+  labs(title = "Distribution of Price (USD)", x = "Price (USD)", y = "Frequency") +
+  theme_minimal()
+# Comment: The price distribution is highly skewed, with most prices below $10 and a few cards having much higher values.
+
+```
+
+## Categorical Variables
+
+```{r explore categorical variables}
+# Analyze 'Card.Type'
+summary(pk$Card.Type)
+ggplot(pk, aes(x = Card.Type)) +
+  geom_bar(fill = "orange", color = "black") +
+  labs(title = "Distribution of Card Type", x = "Card Type", y = "Count") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+# Comment: 'Card Type' has multiple categories, with 'Standard' and 'Reverse Holo' being the most common types.
+
+# Analyze 'Generation'
+summary(pk$Generation)
+ggplot(pk, aes(x = Generation)) +
+  geom_bar(fill = "orange", color = "black") +
+  labs(title = "Distribution of Generation", x = "Generation", y = "Count") +
+  theme_minimal()
+# Comment: 'Generation' variable shows most cards belong to a few specific generations.
+
+# Analyze 'type1'
+summary(pk$type1)
+ggplot(pk, aes(x = type1)) +
+  geom_bar(fill = "orange", color = "black") +
+  labs(title = "Distribution of Type 1", x = "Type 1", y = "Count") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+# Comment: 'Type 1' is distributed across many Pokémon types, with some types being more common.
+
+# Analyze 'type2'
+summary(pk$type2)
+ggplot(pk, aes(x = type2)) +
+  geom_bar(fill = "orange", color = "black") +
+  labs(title = "Distribution of Type 2", x = "Type 2", y = "Count") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+# Comment: 'Type 2' has many missing values indicating that not all Pokémon have a secondary type.
+
+# Analyze 'is_legendary'
+summary(pk$is_legendary)
+ggplot(pk, aes(x = as.factor(is_legendary))) +
+  geom_bar(fill = "orange", color = "black") +
+  labs(title = "Distribution of Legendary Status", x = "Is Legendary", y = "Count") +
+  theme_minimal()
+# Comment: Most Pokémon are not legendary, as the bar chart shows a significantly higher count for non-legendary Pokémon.
+```
+
+
+
+## Card Types
+```{r look at different card types}
+# Calculate the number of rows for each Card.Type and ensure it's a tibble
+card_type_counts <- pk %>%
+  group_by(Card.Type) %>%
+  summarise(Count = n()) %>%
+  arrange(desc(Count)) %>%
+  as_tibble()
+
+# Get the top 5 most common Card.Type values
+top_5_card_types <- card_type_counts$Card.Type[1:5]  # top 5
+
+# Filter the original data to include only these top 5 card types
+pokemon_top_5 <- pk %>%
+  filter(Card.Type %in% top_5_card_types)
+
+# Calculate average price by Card.Type for the top 5 most common types
+avg_price_by_top_5_card_type <- pokemon_top_5 %>%
+  group_by(Card.Type) %>%
+  summarize(Average_Price = mean(price_usd, na.rm = TRUE)) %>%
+  arrange(desc(Average_Price))
+
+# Create a bar plot of average price by Card.Type for the top 5 most common card types
+ggplot(avg_price_by_top_5_card_type, aes(x = reorder(Card.Type, -Average_Price), y = Average_Price, fill = Card.Type)) +
+  geom_bar(stat = "identity") +
+  theme_minimal() +
+  labs(title = "Average Price of Top 5 Most Common Card Types",
+       x = "Card Type",
+       y = "Average Price") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_fill_brewer(palette = "Set3")  
+
+```
+
+
+## Generations
+```{r look at different generations}
+# Calculate the number of rows for each Generation and ensure it's a tibble
+generation_counts <- pk %>%
+  group_by(Generation) %>%
+  summarise(Count = n()) %>%
+  arrange(desc(Count)) %>%
+  as_tibble()
+
+# Get the top 5 most common Generation values
+top_5_generations <- generation_counts$Generation[1:5]  # Using base R indexing to extract top 5
+
+# Filter the original data to include only these top 5 Generations
+pokemon_top_5 <- pk %>%
+  filter(Generation %in% top_5_generations)
+
+# Calculate average price by Generation for the top 5 most common Generations
+avg_price_by_top_5_generation <- pokemon_top_5 %>%
+  group_by(Generation) %>%
+  summarize(Average_Price = mean(price_usd, na.rm = TRUE)) %>%
+  arrange(desc(Average_Price))
+
+# Create a bar plot of average price by Generation for the top 5 most common Generations
+ggplot(avg_price_by_top_5_generation, aes(x = reorder(Generation, -Average_Price), y = Average_Price, fill = Generation)) +
+  geom_bar(stat = "identity") +
+  theme_minimal() +
+  labs(title = "Average Price of Top 5 Most Common Generations",
+       x = "Generation",
+       y = "Average Price") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_fill_brewer(palette = "Set3")  # Choose a color palette
+```
+
+__SCOPE:__ Look at first generation and standard pokemon cards for analysis
+
+# Penalized Regression: Standard Pokemon
+
+## Sort and Clean Data
+```{r sort and clean standard pokemon}
+standard_pokemon <- pk %>%
+  filter(Card.Type == "STANDARD")
+
+# Remove rows with missing price values
+standard_pokemon <- standard_pokemon %>%
+  filter(!is.na(price_usd))
+nrow(standard_pokemon)
+
+# remove large NAs
+standard_pokemon <- standard_pokemon %>%
+  filter_all(all_vars(!is.na(.)))
+
+# Check for duplicate rows based on all columns
+duplicates <- duplicated(standard_pokemon)
+
+# View rows that are duplicates
+duplicate_rows <- standard_pokemon[duplicates, ]
+
+# Remove duplicate rows based on all columns
+standard_pokemon <- standard_pokemon  %>%
+  distinct()
+
+# pick variables to be used in model
+standard_pokemon_cleaned <- standard_pokemon %>%
+  select(price_usd, attack, experience_growth, defense, height_m, hp, sp_attack, sp_defense, speed, weight_kg, generation)
+
+# Check for multicollinearity using VIF (Variance Inflation Factor)
+# Create a linear model for VIF calculation
+vif_model <- lm(price_usd ~ ., data = standard_pokemon_cleaned)
+vif_values <- vif(vif_model)
+print("VIF values for each predictor variable:")
+print(vif_values)
+```
+## Split Data
+
+```{r split data into test and train standard pokemon}
+# Split the data into training and testing sets
+set.seed(123)  # For reproducibility
+train_index <- createDataPartition(standard_pokemon_cleaned$price_usd, p = 0.7, list = FALSE)
+train_data <- standard_pokemon_cleaned[train_index, ]
+test_data <- standard_pokemon_cleaned[-train_index, ]
+
+train_x <- train_data[, -which(colnames(train_data) == "price_usd")]
+train_y <- train_data[, "price_usd"]
+test_x <- test_data[, -which(colnames(test_data) == "price_usd")]
+test_y <- test_data[, "price_usd"]
+
+# If there are factors or characters, convert them to numeric
+train_x <- train_x %>%
+  mutate(across(everything(), ~ as.numeric(.), .names = "converted_{col}"))
+
+# If there are factors or characters, convert them to numeric
+# Apply the same to test_x
+test_x <- test_x %>%
+  mutate(across(everything(), ~ as.numeric(.), .names = "converted_{col}"))
+
+# Step 3: Check for any remaining issues with the structure
+print("Structure of train_x after conversion:")
+str(train_x)
+
+
+# Convert predictors to matrix format as required by glmnet
+train_x <- as.matrix(train_x)
+test_x <- as.matrix(test_x)
+
+train_y <- as.matrix(train_y)
+test_y <- as.matrix(test_y)
+```
+## Question 1: Predictors of Price for Standard Cards
+
+### Lasso Regression
+
+Which Features Most Strongly Influence the Price of a Standard Pokémon Card?
+
+```{r Q1 Feature Importance with Lasso Regression - Standard}
+# Perform Lasso regression to identify important features
+lasso_model <- cv.glmnet(train_x, train_y, alpha = 1, standardize = TRUE)
+
+# Plot the Lasso model cross-validation curve to see optimal lambda
+plot(lasso_model)
+
+# Extract coefficients for the optimal lambda value
+lasso_coefficients <- coef(lasso_model, s = "lambda.min")
+
+# Convert the coefficients to a data frame for easier manipulation
+coefficients_df <- as.data.frame(as.matrix(lasso_coefficients))
+colnames(coefficients_df) <- c("Coefficient")
+
+# Remove the intercept row (optional)
+coefficients_df <- coefficients_df[-1, , drop = FALSE]
+
+# Calculate absolute values of the coefficients
+coefficients_df$abs_value <- abs(coefficients_df$Coefficient)
+
+# Sort by absolute value in descending order
+coefficients_df <- coefficients_df[order(-coefficients_df$abs_value), ]
+
+# Select the top 5 predictors
+top_5_predictors <- head(coefficients_df, 5)
+
+# Display the top 5 predictors with their coefficients
+print(top_5_predictors)
+```
+
+## Question 2: Predicted Price of a Standard Pokémon Card Based on Its Attributes
+What is the Predicted Price of a Standard Pokémon Card Based on Its Attributes?
+
+### Ridge regression
+```{r Q2 Price Prediction with Ridge Regression - Standard}
+ridge_model <- cv.glmnet(train_x, train_y, alpha = 0, standardize = TRUE, type.measure= "mse") 
+ridge_predictions <- predict(ridge_model, newx = test_x, s = ridge_model$lambda.min)
+ridge_rmse <- sqrt(mean((ridge_predictions - test_y)^2))
+avg_price_usd_standard <- mean(test_y)
+
+# Compare actual vs. predicted prices with a scatterplot
+comparison_df <- data.frame(Actual = test_y, ridge_predictions)
+
+# Scatterplot of Actual vs. Predicted Prices
+ggplot(comparison_df, aes(x = Actual, y = ridge_predictions)) +
+  geom_point(color = "blue", alpha = 0.6) +
+  geom_abline(intercept = 0, slope = 1, color = "red", linetype = "dashed") +
+  theme_minimal() +
+  labs(title = "Ridge Regression: Actual vs. Predicted Prices",
+       x = "Actual Price",
+       y = "Predicted Price")
+```
+
+### Assumptions
+```{r check assumptions - standard}
+# 1. Residuals Analysis: Calculate residuals
+y_pred <- predict(lasso_model, s = "lambda.min", newx = train_x)
+residuals <- train_y - y_pred
+
+# Plot residuals vs fitted values
+plot(y_pred, residuals, main = "Residuals vs Fitted Values", xlab = "Fitted Values", ylab = "Residuals")
+abline(h = 0, col = "red")
+
+# 2. Normality Check: Q-Q plot for residuals
+qqnorm(residuals, main = "Q-Q Plot of Residuals")
+qqline(residuals, col = "red")
+
+# Shapiro-Wilk test for normality of residuals
+shapiro_test <- shapiro.test(residuals)
+
+# 3. Homoscedasticity Check: Breusch-Pagan test
+bp_test <- bptest(lm(residuals ~ y_pred))
+
+# Print results
+cat("Shapiro-Wilk test p-value:", shapiro_test$p.value, "\n")
+cat("Breusch-Pagan test p-value:", bp_test$p.value, "\n")
+cat("Optimal Lambda:", "lambda.min" , "\n")
+
+# Check multicollinearity: Calculate VIF (Variance Inflation Factor)
+vif_model <- lm(train_data$price_usd ~ ., data = train_data)
+vif(vif_model)
+
+```
+
+Interpretation:    
+* Shapiro-Wilk Test: p-value < 0.05 indicates that residuals are not approximately normal.  
+* Breusch-Pagan Test: p-value < 0.05 indicates lack of homoscedasticity.   
+* VIF Values: All predictors have VIFs less than 3, assume no multicollinearity.       
+
+
+# Penalized Regression: 1st Edition Pokemon
+
+## Sort and Clean Data
+```{r sort and clean 1st edition pokemon}
+first_pokemon <- pk %>%
+  filter(Card.Type == "1ST EDITION")
+
+# Remove rows with missing price values
+first_pokemon <- first_pokemon %>%
+  filter(!is.na(price_usd))
+nrow(first_pokemon)
+
+# remove large NAs
+first_pokemon <- first_pokemon %>%
+  filter_all(all_vars(!is.na(.)))
+
+# Check for duplicate rows based on all columns
+duplicates <- duplicated(first_pokemon)
+
+# View rows that are duplicates
+duplicate_rows <- first_pokemon[duplicates, ]
+
+# Remove duplicate rows based on all columns
+first_pokemon <- first_pokemon  %>%
+  distinct()
+
+# pick variables to be used in model
+first_pokemon_cleaned <- first_pokemon %>%
+  select(price_usd, attack, experience_growth, defense, height_m, hp, sp_attack, sp_defense, speed, weight_kg, generation)
+
+# Check for multicollinearity using VIF (Variance Inflation Factor)
+# Create a linear model for VIF calculation
+vif_model <- lm(price_usd ~ ., data = first_pokemon_cleaned)
+vif_values <- vif(vif_model)
+print("VIF values for each predictor variable:")
+print(vif_values)
+```
+## Split Data
+
+```{r split data into test and train - 1st edition}
+# Split the data into training and testing sets
+set.seed(123)  # For reproducibility
+train_index <- createDataPartition(first_pokemon_cleaned$price_usd, p = 0.7, list = FALSE)
+train_data <- first_pokemon_cleaned[train_index, ]
+test_data <- first_pokemon_cleaned[-train_index, ]
+
+train_x <- train_data[, -which(colnames(train_data) == "price_usd")]
+train_y <- train_data[, "price_usd"]
+test_x <- test_data[, -which(colnames(test_data) == "price_usd")]
+test_y <- test_data[, "price_usd"]
+
+# If there are factors or characters, convert them to numeric
+train_x <- train_x %>%
+  mutate(across(everything(), ~ as.numeric(.), .names = "converted_{col}"))
+
+# If there are factors or characters, convert them to numeric
+# Apply the same to test_x
+test_x <- test_x %>%
+  mutate(across(everything(), ~ as.numeric(.), .names = "converted_{col}"))
+
+# Step 3: Check for any remaining issues with the structure
+print("Structure of train_x after conversion:")
+str(train_x)
+
+
+# Convert predictors to matrix format as required by glmnet
+train_x <- as.matrix(train_x)
+test_x <- as.matrix(test_x)
+
+train_y <- as.matrix(train_y)
+test_y <- as.matrix(test_y)
+```
+## Question 1: Predictors of Price for 1st Edition Cards
+
+### Lasso Regression
+
+Which Features Most Strongly Influence the Price of a 1st Edition Pokémon Card?
+
+```{r Q1 Feature Importance with Lasso Regression - 1st edition}
+# Perform Lasso regression to identify important features
+lasso_model <- cv.glmnet(train_x, train_y, alpha = 1, standardize = TRUE)
+
+# Plot the Lasso model cross-validation curve to see optimal lambda
+plot(lasso_model)
+
+# Extract coefficients for the optimal lambda value
+lasso_coefficients <- coef(lasso_model, s = "lambda.min")
+
+# Convert the coefficients to a data frame for easier manipulation
+coefficients_df <- as.data.frame(as.matrix(lasso_coefficients))
+colnames(coefficients_df) <- c("Coefficient")
+
+# Remove the intercept row (optional)
+coefficients_df <- coefficients_df[-1, , drop = FALSE]
+
+# Calculate absolute values of the coefficients
+coefficients_df$abs_value <- abs(coefficients_df$Coefficient)
+
+# Sort by absolute value in descending order
+coefficients_df <- coefficients_df[order(-coefficients_df$abs_value), ]
+
+# Select the top 5 predictors
+top_5_predictors <- head(coefficients_df, 5)
+
+# Display the top 5 predictors with their coefficients
+print(top_5_predictors)
+```
+## Question 2: Predicted Price of a Standard Pokémon Card Based on Its Attributes
+What is the Predicted Price of a 1st Edition Pokémon Card Based on Its Attributes?
+
+### Ridge regression
+```{r Q2 Price Prediction with Ridge Regression - 1st edition}
+ridge_model <- cv.glmnet(train_x, train_y, alpha = 0, standardize = TRUE, type.measure= "mse") 
+ridge_predictions <- predict(ridge_model, newx = test_x, s = ridge_model$lambda.min)
+ridge_rmse <- sqrt(mean((ridge_predictions - test_y)^2))
+avg_price_first_edition <- mean(test_y)
+
+# Compare actual vs. predicted prices with a scatterplot
+comparison_df <- data.frame(Actual = test_y, ridge_predictions)
+
+# Scatterplot of Actual vs. Predicted Prices
+ggplot(comparison_df, aes(x = Actual, y = ridge_predictions)) +
+  geom_point(color = "blue", alpha = 0.6) +
+  geom_abline(intercept = 0, slope = 1, color = "red", linetype = "dashed") +
+  theme_minimal() +
+  labs(title = "Ridge Regression: Actual vs. Predicted Prices",
+       x = "Actual Price",
+       y = "Predicted Price")
+
+```
+
+### Assumptions
+```{r check assumptions - 1st edition}
+# 1. Residuals Analysis: Calculate residuals
+y_pred <- predict(lasso_model, s = "lambda.min", newx = train_x)
+residuals <- train_y - y_pred
+
+# Plot residuals vs fitted values
+plot(y_pred, residuals, main = "Residuals vs Fitted Values", xlab = "Fitted Values", ylab = "Residuals")
+abline(h = 0, col = "red")
+
+# 2. Normality Check: Q-Q plot for residuals
+qqnorm(residuals, main = "Q-Q Plot of Residuals")
+qqline(residuals, col = "red")
+
+# Shapiro-Wilk test for normality of residuals
+shapiro_test <- shapiro.test(residuals)
+
+# 3. Homoscedasticity Check: Breusch-Pagan test
+bp_test <- bptest(lm(residuals ~ y_pred))
+
+# Print results
+cat("Shapiro-Wilk test p-value:", shapiro_test$p.value, "\n")
+cat("Breusch-Pagan test p-value:", bp_test$p.value, "\n")
+cat("Optimal Lambda:", "lambda.min" , "\n")
+
+# Check multicollinearity: Calculate VIF (Variance Inflation Factor)
+vif_model <- lm(train_data$price_usd ~ ., data = train_data)
+vif(vif_model)
+
+```
+Interpretation:   
+* Shapiro-Wilk Test: p-value < 0.05 indicates that residuals are not approximately normal.  
+* Breusch-Pagan Test: p-value < 0.05 indicates lack of homoscedasticity. 
+* VIF Values: All predictors have VIFs less than 3, assume no multicollinearity. 
+
+
+
+

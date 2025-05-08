@@ -1,0 +1,432 @@
+---
+title: "Assignment 8 - Neural Networks"
+author: "Maddie Lee"
+date: "2024-11-26"
+output:
+  html_document:
+    number_sections: no
+    toc: yes
+  pdf_document:
+    toc: yes
+editor_options:
+  chunk_output_type: inline
+execute:
+  warning: no
+  message: no
+---
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+# Load necessary libraries
+options(rgl.useNULL = TRUE)
+library(dataPreparation)
+library(doParallel)
+registerDoParallel(cores = 4)
+library(readxl)
+library(mlbench)
+library(glmnet) 
+library(Rtsne)
+library(Rtsne)
+library(knitr)
+library(caret)   
+library(dplyr)   
+library(rminer)
+library(rmarkdown)
+library(tidyverse) 
+library(DescTools)
+library(ggplot2)
+library(lubridate)
+library(tidymodels)
+library(Ckmeans.1d.dp)
+library(rpact)
+library(neuralnet)
+library(MatchIt)
+library(marginaleffects)
+library(quickmatch)
+library(kableExtra)
+library(car)
+library(vip)
+library(corrplot)
+library(ROCR)
+library(psych)
+library(faraway)
+library(neuralnet)
+library(mltools)
+library(lmtest)
+library(tseries)
+library(mclust)
+library(forecast)
+library(reshape2)
+library(kernlab)
+library(e1071)
+library(xgboost)
+library(yardstick)
+library(tune)
+library(randomForest)
+library(ggcorrplot)
+library(tidyverse)
+library(FactoMineR)  
+library(factoextra)
+library(cluster)   
+library(gridExtra)   
+library(NbClust)     
+```
+
+
+# Introduction
+
+__Perspective:__ \ 
+
+Since 2020, I have been working in the mental health field, specifically in residential treatment for at-risk youth. I've always been passionate about mental health and hope to find a role that combines this passion with my skills and expertise in analytics and statistics. This assignment provided a great opportunity to explore mental health datasets and examine the risk factors that may influence overall mental well-being.
+
+For this analysis, I assumed the perspective of a data scientist working for a healthcare organization that specializing in mental health treatment. The goal is to better understand factors influencing mental health outcomes among diverse individuals and provide data-driven insights for targeted interventions. Insights from this analysis can guide mental health advocates and healthcare providers in developing programs that address common stressors and promote mental well-being.
+
+__Analysis:__ \ 
+
+The neural network model was designed and trained using demographic and behavioral data to predict the likelihood of individuals reporting a mental health condition.
+
+
+__Question:__ \ 
+
+Can we predict whether an individual reports a mental health condition based on demographic and lifestyle factors using neural network models?
+
+__Possible Business Impact:__ \   
+
+* Public health authorities can leverage this analysis to improve awareness campaigns and funding decisions for mental health services.
+* Organizations can use insights to develop targeted interventions for employees experiencing high stress levels or insufficient sleep, which were identified as key predictors of mental health conditions
+
+
+
+__Data Source and Description:__ \ 
+
+Source: [Kaggle](https://www.kaggle.com/datasets/bhadramohit/mental-health-dataset/data)
+
+The dataset consists of mental health information for 1000 individuals across various countries, professions, and lifestyles. 
+
+```{r data table, echo=FALSE}
+
+# Create a data frame with variable descriptions
+data_description <- data.frame(
+  Variable = c("Mental_Health_Condition", "Age", "Gender", "Occupation", "Country", 
+               "Severity", "Consultation_History", "Stress_Level", 
+               "Sleep_Hours", "Work_Hours", "Physical_Activity_Hours"),
+  Type = c("Binary", "Numeric", "Categorical", "Categorical", "Categorical", 
+           "Categorical", "Categorical", "Categorical", 
+           "Numeric", "Numeric", "Numeric"),
+  Description = c("Target variable: presence of mental health condition (Yes, No)",
+                  "Age of the individual",
+                  "Gender of the individual (Male, Female, Non-binary)",
+                  "Occupation of the individual (IT, Healthcare, Education, etc.)",
+                  "Country of residence (USA, India, UK, Canada, Australia)",
+                  "Severity of mental health condition (None, Low, Medium, High)",
+                  "Consultation history with a mental health professional (Yes, No)",
+                  "Stress level (Low, Medium, High)",
+                  "Average hours of sleep per day",
+                  "Average hours of work per week",
+                  "Average physical activity hours per week")
+)
+
+# Render the table with kable and add styling with kableExtra
+kable(data_description, 
+      caption = "Table 1: Data Description", 
+      col.names = c("Variable", "Type", "Description"),
+      align = "l") %>%
+  kable_styling(full_width = F, bootstrap_options = c("striped", "hover", "condensed", "responsive")) %>%
+  row_spec(0, bold = TRUE, color = "white", background = "grey") %>%  # Header styling
+  column_spec(1, bold = TRUE) %>%  # Bold the first column
+  column_spec(2, width = "10em") %>%  # Set column width for "Type"
+  column_spec(3, width = "25em")  # Set column width for "Description"
+
+```
+
+Neural networks excel at modeling non-linear relationships and can handle both categorical and numerical variables after preprocessing (e.g., encoding and scaling).
+
+
+__Conclusions:__
+
+The neural network achieved an accuracy of approximately 52.7%, indicating moderate predictive power. The ROC curve (AUC = 0.61) further highlights its capability to distinguish between individuals with and without mental health conditions. Key predictors identified include Stress_Level and Consultation_History, as evidenced by the model’s feature importance metrics.
+
+The confusion matrix shows the model was better at predicting individual with a reporting mental health condition (positive case) than individuals that reported not having a mental health condition (negative case).
+
+__Limitations:__
+
+* The dataset is self-reported, which introduces bias. Individuals may underreport or overreport factors like stress levels, work hours, and physical activity.  
+* The dataset only includes 1000 individuals, which may not be large enough to generalize findings to larger populations.  
+* The kaggle information did not include a time period or source of information found.  
+ 
+
+
+__Assumptions and Robustness Checks:__
+
+Assumptions:
+
+* We assume that the data collected is accurate and representative of the population.  
+* We assume that stress levels and sleep hours are self-reported accurately by the individuals in the dataset.  
+
+Robustness Checks:
+
+* I performed cross-validation to ensure that the model's performance is consistent across different splits of the training data.  
+* Hyperparameter tuning was conducted using a grid search to identify the optimal configuration of model parameters, improving the model’s generalizability.  
+
+Future Ideas:
+
+* If I had more time I would look for additional datasets that could add to the model and make it more generalizable.
+* I could compare the performance of the neural network model to other modeling types like a logistic regression. 
+
+
+# Read Data
+```{r load datasets, warning=FALSE}
+# Load data sets and clean variables
+cloud_wd <- "/Users/madelinelee/Downloads"
+setwd(cloud_wd)
+
+mh <- read.csv("mental_health_dataset.csv")
+
+# Convert categorical variables to factors
+mh <- mh %>%
+  mutate(across(c(Gender, Occupation, Country, Mental_Health_Condition, 
+                  Severity, Consultation_History, Stress_Level), as.factor))
+
+# Remove ID column for analysis
+mh <- mh %>%
+  select(-User_ID)
+
+# Check for missing values
+colSums(is.na(mh))
+
+
+head(mh)
+str(mh)
+```
+
+# EDA
+
+## Summary Statistics for Numeric and Categorical Variables
+```{r summary stats}
+# Summary for numeric variables
+summary(mh %>% select(Age, Sleep_Hours, Work_Hours, Physical_Activity_Hours))
+
+# Summary for categorical variables
+mh %>%
+  select(Gender, Occupation, Country, Mental_Health_Condition, Severity, Consultation_History, Stress_Level) %>%
+  summarise_all(~n_distinct(.))
+
+```
+
+## Distribution of Numerical Variables
+
+```{r numeric dist}
+# Histograms for numeric variables
+ggplot(mh, aes(x = Age)) +
+  geom_histogram(binwidth = 5, fill = "blue", color = "white") +
+  labs(title = "Distribution of Age", x = "Age", y = "Frequency")
+
+ggplot(mh, aes(x = Sleep_Hours)) +
+  geom_histogram(binwidth = 1, fill = "green", color = "white") +
+  labs(title = "Distribution of Sleep Hours", x = "Sleep Hours", y = "Frequency")
+
+ggplot(mh, aes(x = Work_Hours)) +
+  geom_histogram(binwidth = 5, fill = "orange", color = "white") +
+  labs(title = "Distribution of Work Hours", x = "Work Hours", y = "Frequency")
+
+ggplot(mh, aes(x = Physical_Activity_Hours)) +
+  geom_histogram(binwidth = 1, fill = "purple", color = "white") +
+  labs(title = "Distribution of Physical Activity Hours", x = "Physical Activity Hours", y = "Frequency")
+
+# Boxplots for numeric variables
+ggplot(mh, aes(y = Age)) +
+  geom_boxplot(fill = "blue") +
+  labs(title = "Boxplot of Age", y = "Age")
+
+ggplot(mh, aes(y = Sleep_Hours)) +
+  geom_boxplot(fill = "green") +
+  labs(title = "Boxplot of Sleep Hours", y = "Sleep Hours")
+
+ggplot(mh, aes(y = Work_Hours)) +
+  geom_boxplot(fill = "orange") +
+  labs(title = "Boxplot of Work Hours", y = "Work Hours")
+
+ggplot(mh, aes(y = Physical_Activity_Hours)) +
+  geom_boxplot(fill = "purple") +
+  labs(title = "Boxplot of Physical Activity Hours", y = "Physical Activity Hours")
+
+```
+
+
+## Distribution of Categorical Variables
+
+```{r}
+# Bar plots for categorical variables
+ggplot(mh, aes(x = Gender)) +
+  geom_bar(fill = "lightblue") +
+  labs(title = "Distribution of Gender", x = "Gender", y = "Count")
+
+ggplot(mh, aes(x = Occupation)) +
+  geom_bar(fill = "lightgreen") +
+  labs(title = "Distribution of Occupation", x = "Occupation", y = "Count") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+ggplot(mh, aes(x = Stress_Level)) +
+  geom_bar(fill = "gold") +
+  labs(title = "Distribution of Stress Level", x = "Stress Level", y = "Count")
+
+```
+
+## Target Distribution and Balance
+```{r target distrubution}
+ggplot(mh, aes(x = Mental_Health_Condition)) +
+  geom_bar(fill = "blue") +
+  labs(title = "Distribution of Mental Health Condition", x = "Mental Health Condition", y = "Count")
+
+mh %>%
+  group_by(Mental_Health_Condition) %>%
+  summarise(Count = n()) %>%
+  mutate(Percentage = (Count / sum(Count)) * 100)
+
+
+```
+
+Data appears balanced with 48.5% reporting no mental health condition and 51.5% reporting a mental health condition. This means we do not need to adjust for imbalanced data with up or downsampling with training the model.
+
+## Correlation Analysis
+
+```{r numeric correlation}
+numeric_vars <- mh %>% select(Age, Sleep_Hours, Work_Hours, Physical_Activity_Hours)
+correlation_matrix <- cor(numeric_vars)
+ggcorrplot(correlation_matrix, lab = TRUE)
+```
+
+None of the numeric predictors have a strong correlation (all below +- .05)
+
+## Bivariate Analysis
+```{r bivariate}
+# Boxplots to see how numeric variables relate to mental health condition
+ggplot(mh, aes(x = Mental_Health_Condition, y = Age, fill = Mental_Health_Condition)) +
+  geom_boxplot() +
+  labs(title = "Mental Health Condition vs Age", x = "Mental Health Condition", y = "Age")
+
+ggplot(mh, aes(x = Mental_Health_Condition, y = Sleep_Hours, fill = Mental_Health_Condition)) +
+  geom_boxplot() +
+  labs(title = "Mental Health Condition vs Sleep Hours", x = "Mental Health Condition", y = "Sleep Hours")
+
+ggplot(mh, aes(x = Mental_Health_Condition, y = Work_Hours, fill = Mental_Health_Condition)) +
+  geom_boxplot() +
+  labs(title = "Mental Health Condition vs Work Hours", x = "Mental Health Condition", y = "Work Hours")
+
+ggplot(mh, aes(x = Mental_Health_Condition, y = Physical_Activity_Hours, fill = Mental_Health_Condition)) +
+  geom_boxplot() +
+  labs(title = "Mental Health Condition vs Physical Activity Hours", x = "Mental Health Condition", y = "Physical Activity Hours")
+```
+
+There seems to be no major differences in numeric predictors between individuals that did and did not report a mental health condition.
+
+# Data Splitting
+
+```{r data split}
+# Set a seed for reproducibility
+set.seed(123)
+
+# Use createDataPartition to create a training index
+train_index <- createDataPartition(mh$Mental_Health_Condition, p = 0.8, list = FALSE)
+
+# Subset data into training and testing sets
+train <- mh[train_index, ]
+test <- mh[-train_index, ]
+
+# Display the sizes of each dataset
+cat("Training set size:", nrow(train), "\n")
+cat("Testing set size:", nrow(test), "\n")
+
+train_predictor <- train[,-5]
+train_outcome <- train [,5]
+test_predictor <- test[,-5]
+test_outcome <- test [,5]
+```
+
+# Cross Validation
+```{r cv}
+ctrl <- trainControl(method = "repeatedcv", # cross-validation
+  number = 5, # 5 folds
+  repeats = 5,
+  classProbs = TRUE # report class probability
+)
+```
+
+```{r tuning}
+avnnetGrid <- expand.grid(decay = c(.001,.005),
+  size = c(15:35),
+  bag = FALSE)
+
+avnnet_fit <- train(train_predictor, train_outcome,
+  method = "avNNet",
+  tuneGrid = avnnetGrid,
+  trControl = ctrl,
+  softmax = TRUE,
+  reProc = c("center", "scale"),
+  trace = FALSE,
+  metric= "Accuracy",
+  allowParallel=TRUE,
+  maxit = 50)
+
+plot(avnnet_fit)
+```
+
+# Predicting
+```{r predict}
+predicted_outcome <- predict(avnnet_fit, test_predictor)
+postResample(pred = factor(predicted_outcome), obs = factor(test_outcome))
+```
+
+# Confusion Matrix
+
+```{r confusion matrix}
+confusionMatrix(data = factor(predicted_outcome),
+reference = factor(test_outcome))$table
+```
+# Feature Importance
+
+```{r feature importance}
+
+# Function to calculate permutation importance
+calculate_permutation_importance_avnnet <- function(model, test_X, test_y) {
+  # Base predictions and accuracy
+  base_predictions <- predict(model, test_X)
+  base_accuracy <- mean(base_predictions == test_y)
+  
+  # Calculate importance for each feature
+  feature_importances <- sapply(1:ncol(test_X), function(i) {
+    # Permute one feature
+    permuted_X <- test_X
+    permuted_X[, i] <- sample(permuted_X[, i])
+    
+    # Predictions with permuted feature
+    permuted_predictions <- predict(model, permuted_X)
+    permuted_accuracy <- mean(permuted_predictions == test_y)
+    
+    # Importance as drop in accuracy
+    base_accuracy - permuted_accuracy
+  })
+  
+  names(feature_importances) <- colnames(test_X)
+  return(feature_importances)
+}
+
+# Use your testing dataset for evaluation
+# Replace `test_predictor` and `test_outcome` with your actual data
+feature_importances <- calculate_permutation_importance_avnnet(avnnet_fit, test_predictor, test_outcome)
+
+# Sort and display feature importances
+feature_importances <- sort(feature_importances, decreasing = TRUE)
+print(feature_importances)
+
+# Visualize feature importance
+barplot(
+  feature_importances,
+  main = "Feature Importance for avNNet Model",
+  horiz = TRUE,
+  col = "steelblue",
+  las = 1,
+  xlab = "Importance (Drop in Accuracy)"
+)
+
+
+```
+

@@ -1,0 +1,627 @@
+---
+title: "PCA and Clustering Analysis"
+author: "Maddie Lee"
+date: "2024-11-19"
+output:
+  html_document:
+    number_sections: no
+    toc: yes
+  pdf_document:
+    toc: yes
+editor_options:
+  chunk_output_type: inline
+execute:
+  warning: no
+  message: no
+---
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+# Load necessary libraries
+options(rgl.useNULL = TRUE)
+library(dataPreparation)
+library(readxl)
+library(mlbench)
+library(glmnet) 
+library(Rtsne)
+library(Rtsne)
+library(knitr)
+library(caret)   
+library(dplyr)   
+library(rminer)
+library(rmarkdown)
+library(tidyverse) 
+library(DescTools)
+library(ggplot2)
+library(lubridate)
+library(tidymodels)
+library(Ckmeans.1d.dp)
+library(rpact)
+library(MatchIt)
+library(marginaleffects)
+library(quickmatch)
+library(kableExtra)
+library(car)
+library(vip)
+library(corrplot)
+library(ROCR)
+library(psych)
+library(faraway)
+library(lmtest)
+library(tseries)
+library(mclust)
+library(forecast)
+library(reshape2)
+library(kernlab)
+library(e1071)
+library(xgboost)
+library(yardstick)
+library(tune)
+library(randomForest)
+library(ggcorrplot)
+library(tidyverse)
+library(FactoMineR)  
+library(factoextra)
+library(cluster)   
+library(gridExtra)   
+library(NbClust)     
+```
+
+# Introduction
+
+__Perspective:__ \ 
+
+I’m conducting the analysis as a data analyst exploring patterns in college admissions data.My goal is to uncover patterns in financial aid distribution and standardized test scores to assist in strategic admissions planning.
+
+
+__Analysis:__ \ 
+
+For this assignment, I focused on the standardized test scores and financial aid variables. There are several features that can represent test scores and financial aid so I used PCA to determine the ones that would be appropriate then used K means to created cluster groups. 
+
+__Question:__ \ 
+
+The question I’m exploring is: What patterns can be uncovered in college admissions data, and how can we group applicants based on their profiles? I want to understand which factors drive differences between applicants and how these insights can be applied to improve admissions strategies or guide businesses offering admissions-related services.
+
+__Possible Business Impact:__ \   
+
+Financial Aid Strategy: The clusters can help allocate resources more effectively.  
+For example:  
+* High-need, high-performing clusters might prioritize need-based aid.  
+* Low-need, high-performing clusters could be targeted with merit scholarships to attract top talent.  
+
+Admissions Strategy: Insights from PCA and clustering help admissions teams focus on key criteria for evaluation, such as specific academic standards.
+
+Targeted Outreach: Institutions can identify clusters of applicants who are underrepresented or likely to enroll, allowing for personalized recruitment strategies.
+
+
+__Data Source and Description:__ \ 
+
+The data comes from the IPEDS dataset for college characteristics, admissions, and financial aid statistics.
+
+Source: [American University Data](https://public.tableau.com/en-us/s/resources)
+
+```{r data table, echo=FALSE}
+
+# Create a data frame with variable names and types
+data_description <- data.frame(
+  Variable = c(
+    "Percent_of_freshmen_receiving_any_financial_aid",
+    "Percent_of_freshmen_receiving_federal_state_local_or_institutional_grant_aid",
+    "Percent_of_freshmen_receiving_federal_grant_aid",
+    "Percent_of_freshmen_receiving_Pell_grants",
+    "Percent_of_freshmen_receiving_other_federal_grant_aid",
+    "Percent_of_freshmen_receiving_state_local_grant_aid",
+    "Percent_of_freshmen_receiving_institutional_grant_aid",
+    "Percent_of_freshmen_receiving_student_loan_aid",
+    "Percent_of_freshmen_receiving_federal_student_loans",
+    "Percent_of_freshmen_receiving_other_loan_aid",
+    "SAT_Critical_Reading_25th_percentile_score",
+    "SAT_Critical_Reading_75th_percentile_score",
+    "SAT_Writing_25th_percentile_score",
+    "SAT_Writing_75th_percentile_score",
+    "SAT_Math_25th_percentile_score",
+    "SAT_Math_75th_percentile_score",
+    "ACT_Composite_25th_percentile_score",
+    "ACT_Composite_75th_percentile_score"
+  ),
+  Type = c(
+    rep("Numeric", 10),  # Financial aid variables
+    rep("Numeric", 8)    # Test score variables
+  )
+)
+
+# Render the table with kable and style it with kableExtra
+library(kableExtra)
+
+kable(data_description,
+      caption = "Table 1: Data Variables",
+      col.names = c("Variable", "Type"),
+      align = "l") %>%
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover", "condensed", "responsive")) %>%
+  row_spec(0, bold = TRUE, color = "white", background = "grey") %>%  # Header styling
+  column_spec(1, bold = TRUE) %>%  # Bold the first column
+  column_spec(2, width = "10em")  # Set column width for "Type"
+
+
+
+```
+
+
+How are your variables suitable for your analysis method?    
+
+PCA Suitability: The variables are numeric and scaled for consistency, making them appropriate for PCA to reduce dimensionality.  
+
+Clustering Suitability: The PCA-transformed data reduces noise and ensures features are uncorrelated, providing a strong basis for clustering.
+
+
+
+__Conclusions:__
+
+PCA Analysis:
+
+Financial Aid Data PCA:  
+
+* The scree plot shows that the first principal component (PC1) explains a significant proportion (~40%) of the variance.
+* The first two components cumulatively account for a substantial portion of the variance, suggesting that most of the data's structure can be captured with just two dimensions.  
+
+Test Scores Data PCA:  
+
+* The scree plot indicates that the first principal component explains a very high percentage (~75%) of the variance.
+* The variance drops sharply after PC1, implying that the data structure is mostly one-dimensional, with minimal additional information captured in subsequent components.  
+
+Clustering Analysis:
+
+K-means on Financial Aid Data:
+
+* Clustering on the first two principal components identified three clusters. (Found using Silhouette Scores)
+* The clusters appear well-separated in the plot, indicating that PCA effectively reduced the dimensionality and revealed inherent groupings in the data.
+
+K-means on Test Scores Data:
+
+* Clustering on the first two principal components identified two clusters. (Found using Silhouette Scores)
+* The clusters overlap somewhat but are still distinguishable, aligning with the PCA results that most of the variance is captured by PC1.
+
+
+
+Financial Aid Data:
+
+* The data has multiple underlying patterns that can be effectively captured using two principal components.
+* The presence of three clusters suggests meaningful subgroups in the financial aid data, potentially representing different financial needs or profiles.
+
+Test Scores Data:
+
+* The data is dominated by a single dimension of variance, as seen in PC1.
+* The two clusters identified may correspond to distinct performance groups, such as high- and low-performing students.
+
+
+
+__Limitations:__
+
+* Our dataset is information on a single year. Student populations and needs can change from year to year so it might not be generalizable to future or previous years. 
+* PCA reduces the dataset dimensions, which may result in the loss of some fine-grained details not captured in the first few principal components.
+
+
+__Assumptions and Robustness Checks:__
+
+Assumptions:    
+
+We imputed missing values with the average. We are assuming this will not create bias.   
+
+With PCA we are assuming linear relationships among the variables. Our robustness checks shows that other dimensionality might be more appropriate for the data, especially with our test scores data.     
+
+Using K Means, we assume the clusters are spherical and equally sized in the reduced PCA space.   
+
+
+Robustness Checks:
+
+* Variance Explained: Showed stability of PCA components 
+* Silhouette Scores: Used to find the optimal number of clusters
+* Cluster Stability: Validates cluster consistency across different seeds. Moderate for financial aid features but highly robust for standardized test features.  
+* Alternative Dimensionality: Explores patterns missed by linear PCA. 
+* Permutation Testing: Confirms PCA components capture meaningful variance.
+
+
+If I had more time I could also do a missing data robustness check to ensure imputing the missing values didn't result in unwanted bias. 
+
+In the future I could test different clustering methods like hierarchical clustering or DBSCAN to test stability further for the financial aid features since the stability showed it was only moderate in my check.  
+
+# Read Data
+
+```{r read and clean data}
+# Load data sets and clean variables
+cloud_wd <- "/Users/madelinelee/Downloads"
+setwd(cloud_wd)
+
+# Define the file path
+excel_file_path <- "IPEDS_data.xlsx"  
+
+# List sheet names in the Excel file
+sheet_names <- excel_sheets(excel_file_path)
+
+# Display sheet names to understand the structure of the Excel file
+print(sheet_names)
+
+# Load the 'Data' sheet to inspect the dataset
+admin<- read_excel(excel_file_path, sheet = "Data")
+
+
+# Review missing values
+missing_summary <- sapply(admin, function(x) sum(is.na(x)))
+missing_summary <- missing_summary[missing_summary > 0]
+
+
+# Select relevant features for PCA and clustering
+selected_features <- admin %>% 
+  select(
+    'SAT Critical Reading 25th percentile score', 'SAT Critical Reading 75th percentile score',
+    'SAT Writing 25th percentile score', 'SAT Writing 75th percentile score',
+    'SAT Math 25th percentile score', 'SAT Math 75th percentile score',
+    'ACT Composite 25th percentile score', 'ACT Composite 75th percentile score',
+    'Percent of freshmen receiving any financial aid',
+    'Percent of freshmen receiving federal, state, local or institutional grant aid',
+    'Percent of freshmen  receiving federal grant aid',
+    'Percent of freshmen receiving Pell grants',
+    'Percent of freshmen receiving other federal grant aid',
+    'Percent of freshmen receiving state/local grant aid',
+    'Percent of freshmen receiving institutional grant aid',
+    'Percent of freshmen receiving student loan aid',
+    'Percent of freshmen receiving federal student loans',
+    'Percent of freshmen receiving other loan aid'
+) %>%
+  drop_na() 
+
+head(selected_features)
+str(selected_features)
+
+
+```
+
+# EDA
+
+## Visualize Distributions
+
+```{r numeric variables}
+selected_features %>%
+  gather(key = "Feature", value = "Value") %>%
+  split(.$Feature) %>%
+  lapply(function(data) {
+    ggplot(data, aes(x = Value)) +
+      geom_histogram(bins = 30, fill = "skyblue", color = "black") +
+      labs(
+        title = paste("Distribution of", unique(data$Feature)),
+        x = unique(data$Feature),
+        y = "Count"
+      ) +
+      theme_minimal()
+  }) %>%
+  lapply(print)
+
+```
+# Correlation Matrix
+
+```{r corr plot}
+# subset features to standardized test variables
+test_score_features <- selected_features %>%
+  select(
+    `SAT Critical Reading 25th percentile score`,
+    `SAT Critical Reading 75th percentile score`,
+    `SAT Writing 25th percentile score`,
+    `SAT Writing 75th percentile score`,
+    `SAT Math 25th percentile score`,
+    `SAT Math 75th percentile score`,
+    `ACT Composite 25th percentile score`,
+    `ACT Composite 75th percentile score`
+  )
+
+
+# Calculate variance-covariance matrix
+cov_matrix_standardized_test <- cov(test_score_features, use = "complete.obs")
+
+cor_matrix_standardized_test <- cor(test_score_features, use = "complete.obs")
+
+
+# Visualize the correlation matrix using corrplot
+corrplot(cor_matrix_standardized_test,
+         method = "color",
+         type = "upper",
+         diag = TRUE,
+         tl.col = "black",
+         tl.srt = 90,
+         tl.cex = 0.9,
+         title = "Correlation Matrix Heatmap",
+         mar = c(0,0,1,0))
+
+
+# subset features to financial aid variables
+financial_aid_features <- selected_features %>%
+  select(
+    `Percent of freshmen receiving any financial aid`,
+    `Percent of freshmen receiving federal, state, local or institutional grant aid`,
+    `Percent of freshmen  receiving federal grant aid`,
+    `Percent of freshmen receiving Pell grants`,
+    `Percent of freshmen receiving other federal grant aid`,
+    `Percent of freshmen receiving state/local grant aid`,
+    `Percent of freshmen receiving institutional grant aid`,
+    `Percent of freshmen receiving student loan aid`,
+    `Percent of freshmen receiving federal student loans`,
+    `Percent of freshmen receiving other loan aid`
+  )
+
+
+# Calculate variance-covariance matrix
+cov_matrix_financial_aid <- cov(financial_aid_features, use = "complete.obs")
+
+cor_matrix_financial_aid <- cor(financial_aid_features, use = "complete.obs")
+
+
+
+```
+# Variance
+```{r}
+# Standardized Tests
+
+# Get variance of each variable
+variances_standardized_test <- diag(cov_matrix_standardized_test)
+
+# Create a data frame of variances for better viewing
+var_df_standardized_test <- data.frame(
+  Variable = names(variances_standardized_test),
+  Variance = round(variances_standardized_test, 3)
+)
+
+# Sort by variance in descending order
+var_df_standardized_test <- var_df_standardized_test[order(-var_df_standardized_test$Variance), ]
+
+# Print variances
+cat("Variances of each standardize test variable (sorted):\n")
+print(var_df_standardized_test)
+
+# financial aid
+
+# Get variance of each variable
+variances_financial_aid <- diag(cov_matrix_financial_aid)
+
+# Create a data frame of variances for better viewing
+var_df_financial_aid <- data.frame(
+  Variable = names(variances_financial_aid),
+  Variance = round(variances_financial_aid, 3)
+)
+
+# Sort by variance in descending order
+var_df_financial_aid <- var_df_financial_aid[order(-var_df_financial_aid$Variance), ]
+
+# Print variances
+cat("Variances of each financial aid variable (sorted):\n")
+print(var_df_financial_aid)
+```
+```{r total variance}
+# Calculate and print total variance for standardize test
+total_var_st <- sum(variances_standardized_test)
+cat(paste("Total variance:", round(total_var_st, 2)))
+
+# Calculate and print total variance for financial aid
+total_var_fa <- sum(variances_financial_aid)
+cat(paste("Total variance:", round(total_var_fa, 2)))
+```
+
+
+# Subset Data
+
+```{r subset and split}
+# Define variables for financial aid and test scores
+financial_aid_features <- c(
+  "Percent of freshmen receiving any financial aid",
+  "Percent of freshmen receiving federal, state, local or institutional grant aid",
+  "Percent of freshmen receiving federal grant aid",
+  "Percent of freshmen receiving Pell grants",
+  "Percent of freshmen receiving other federal grant aid",
+  "Percent of freshmen receiving state/local grant aid",
+  "Percent of freshmen receiving institutional grant aid",
+  "Percent of freshmen receiving student loan aid",
+  "Percent of freshmen receiving federal student loans",
+  "Percent of freshmen receiving other loan aid"
+)
+
+test_score_features <- c(
+  "SAT Critical Reading 25th percentile score",
+  "SAT Critical Reading 75th percentile score",
+  "SAT Writing 25th percentile score",
+  "SAT Writing 75th percentile score",
+  "SAT Math 25th percentile score",
+  "SAT Math 75th percentile score",
+  "ACT Composite 25th percentile score",
+  "ACT Composite 75th percentile score"
+)
+
+# Subset data for financial aid features using base R
+financial_aid_data <- admin[, colnames(admin) %in% financial_aid_features]
+
+# Subset data for test score features using base R
+test_score_data <- admin[, colnames(admin) %in% test_score_features]
+
+# Check the structure of the subsets
+str(financial_aid_data)
+str(test_score_data)
+
+
+# Split the dataset into training and testing sets
+set.seed(123)
+train_indices <- createDataPartition(seq_len(nrow(financial_aid_data)), p = 0.7, list = FALSE)
+financial_aid_train <- financial_aid_data[train_indices, ]
+financial_aid_test <- financial_aid_data[-train_indices, ]
+test_score_train <- test_score_data[train_indices, ]
+test_score_test <- test_score_data[-train_indices, ]
+
+# Handle missing values (impute with mean)
+financial_aid_train <- financial_aid_train %>% mutate_all(~ ifelse(is.na(.), mean(., na.rm = TRUE), .))
+financial_aid_test <- financial_aid_test %>% mutate_all(~ ifelse(is.na(.), mean(., na.rm = TRUE), .))
+test_score_train <- test_score_train %>% mutate_all(~ ifelse(is.na(.), mean(., na.rm = TRUE), .))
+test_score_test <- test_score_test %>% mutate_all(~ ifelse(is.na(.), mean(., na.rm = TRUE), .))
+
+
+```
+
+# Standardize Data
+
+```{r standardize}
+# Standardize data
+financial_aid_train_scaled <- scale(financial_aid_train)
+financial_aid_test_scaled <- scale(financial_aid_test)
+test_score_train_scaled <- scale(test_score_train)
+test_score_test_scaled <- scale(test_score_test)
+```
+
+# PCA
+
+```{r pca}
+# PCA for Financial Aid Data
+financial_aid_pca <- prcomp(financial_aid_train_scaled, center = TRUE, scale. = TRUE)
+fviz_eig(financial_aid_pca)  # Scree plot
+
+# PCA for Test Scores Data
+test_score_pca <- prcomp(test_score_train_scaled, center = TRUE, scale. = TRUE)
+fviz_eig(test_score_pca)  # Scree plot
+```
+
+# K Means Clustering
+
+```{r cluster}
+# K-means Clustering on Financial Aid PCA
+set.seed(123)
+financial_clusters <- kmeans(financial_aid_pca$x[, 1:2], centers = 3)
+fviz_cluster(financial_clusters, data = financial_aid_pca$x[, 1:2])
+
+# K-means Clustering on Test Score PCA
+test_clusters <- kmeans(test_score_pca$x[, 1:2], centers = 2)
+fviz_cluster(test_clusters, data = test_score_pca$x[, 1:2])
+
+# Evaluate on test data
+financial_aid_test_pca <- predict(financial_aid_pca, newdata = financial_aid_test_scaled)
+test_score_test_pca <- predict(test_score_pca, newdata = test_score_test_scaled)
+```
+
+# Robustness Checks
+
+## Cross-Validation of PCA Components
+
+```{r cross validation}
+# Proportion of variance explained by each PCA component (training data)
+financial_aid_variance_train <- summary(financial_aid_pca)$importance[2, ]
+test_score_variance_train <- summary(test_score_pca)$importance[2, ]
+
+# Proportion of variance explained by each PCA component (testing data)
+financial_aid_test_pca <- predict(financial_aid_pca, newdata = financial_aid_test_scaled)
+test_score_test_pca <- predict(test_score_pca, newdata = test_score_test_scaled)
+
+financial_aid_variance_test <- apply(financial_aid_test_pca, 2, var) / sum(apply(financial_aid_test_pca, 2, var))
+test_score_variance_test <- apply(test_score_test_pca, 2, var) / sum(apply(test_score_test_pca, 2, var))
+
+# Print results
+print(financial_aid_variance_train)
+print(financial_aid_variance_test)
+print(test_score_variance_train)
+print(test_score_variance_test)
+```
+
+Similar explained variance patterns in both train and test datasets for the standardized test and financial aid features, indicating stability of the PCA components.
+
+## Cluster Validation
+
+```{r cluster validation}
+# Silhouette analysis function
+silhouette_scores <- function(data, max_k) {
+  scores <- sapply(2:max_k, function(k) {
+    km <- kmeans(data, centers = k)
+    mean(silhouette(km$cluster, dist(data))[, 3])
+  })
+  plot(2:max_k, scores, type = "b", xlab = "Number of Clusters", ylab = "Silhouette Score")
+}
+
+# Silhouette scores for financial aid and test scores PCA-transformed data
+silhouette_scores(financial_aid_pca$x[, 1:2], 10)  # Financial Aid
+silhouette_scores(test_score_pca$x[, 1:2], 10)     # Test Scores
+```
+
+
+Number of optimal clusters for financial aid: 2
+Number of optimal cluster for standardized test: 3
+
+
+## Cluster Stability Testing and Alternative Dimensionality Reduction
+
+```{r cluster stability testing}
+set.seed(123)
+km1 <- kmeans(financial_aid_pca$x[, 1:2], centers = 3)
+
+set.seed(456)
+km2 <- kmeans(financial_aid_pca$x[, 1:2], centers = 3)
+
+# Compare cluster assignments
+table(km1$cluster, km2$cluster)
+
+# Run t-SNE
+tsne_financial <- Rtsne(financial_aid_train_scaled, perplexity = 30, check_duplicates = FALSE)
+plot(tsne_financial$Y, col = km1$cluster, pch = 19, main = "t-SNE Clustering (Financial Aid)")
+
+km1 <- kmeans(test_score_pca$x[, 1:2], centers = 3)
+
+set.seed(456)
+km2 <- kmeans(test_score_pca$x[, 1:2], centers = 3)
+
+# Compare cluster assignments
+table(km1$cluster, km2$cluster)
+
+# Run t-SNE
+tsne_standardized <- Rtsne(test_score_train_scaled, perplexity = 30, check_duplicates = FALSE)
+plot(tsne_standardized$Y, col = km1$cluster, pch = 19, main = "t-SNE Clustering (Standardized Test Scores)")
+```
+Cluster Stability Testing:  
+
+Stability is evaluated by comparing cluster assignments between different seeds.    
+
+A consistent mapping in the table (km1$cluster vs. km2$cluster) indicates robust and stable clusters. Large mismatches suggest sensitivity to initialization.  
+
+Financial Aid Features: Shows moderate stability with some areas of improvement needed.  
+
+Standardized Testing Features: This table demonstrates a very robust clustering solution, with distinct clusters that perfectly align across the two runs. 
+
+Alternative Dimensionality Reduction:  
+
+Explores patterns missed by linear PCA.    
+
+Compare t-SNE clustering patterns with PCA-based clustering. Similar patterns indicate that PCA captures the underlying structure well.    
+
+Financial Aid Features: The t-SNE visualization shows three distinct clusters with minimal overlap between them, suggesting that the financial aid data can be grouped meaningfully. 
+
+Standardized Testing Features: The t-SNE visualization reveals a branching structure for the clusters, which might suggest underlying variability in test score characteristics.
+
+
+## Permutation Testing for PCA Components
+
+```{r permutation testing}
+permuted_variance <- replicate(100, {
+  shuffled <- financial_aid_train_scaled[sample(nrow(financial_aid_train_scaled)), ]
+  pca_shuffled <- prcomp(shuffled)
+  summary(pca_shuffled)$importance[2, ]
+})
+
+# Boxplot of permutation results
+boxplot(permuted_variance, main = "Permutation Test for PCA Components")
+
+permuted_variance <- replicate(100, {
+  shuffled <- test_score_train_scaled[sample(nrow(test_score_train_scaled)), ]
+  pca_shuffled <- prcomp(shuffled)
+  summary(pca_shuffled)$importance[2, ]
+})
+
+# Boxplot of permutation results
+boxplot(permuted_variance, main = "Permutation Test for PCA Components")
+
+```
+Compare the variance explained by PCA on actual data vs. shuffled data.  
+
+Financial Aid Features: Components in the actual data exceed the range of permuted variance consistently, suggesting that the variance captured by PCA components is statistically significant.  
+
+Standardized Test Features: The gap between the actual variance and the permuted variance validates that the PCA components derived from the original data are statistically significant.  
+
+
+
+
