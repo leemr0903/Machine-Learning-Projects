@@ -1,0 +1,760 @@
+---
+title: "Machine Learning Final Project"
+author: "Maddie Lee"
+date: "2024-12-11"
+output:
+  html_document:
+    number_sections: no
+    toc: yes
+  pdf_document:
+    toc: yes
+editor_options:
+  chunk_output_type: inline
+execute:
+  warning: no
+  message: no
+---
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+# Load necessary libraries
+options(rgl.useNULL = TRUE)
+library(dataPreparation)
+library(doParallel)
+registerDoParallel(cores = 4)
+library(readxl)
+library(mlbench)
+library(glmnet) 
+library(Rtsne)
+library(Rtsne)
+library(knitr)
+library(caret)   
+library(dplyr)   
+library(rminer)
+library(rmarkdown)
+library(tidyverse) 
+library(DescTools)
+library(ggplot2)
+library(lubridate)
+library(tidymodels)
+library(Ckmeans.1d.dp)
+library(rpact)
+library(neuralnet)
+library(MatchIt)
+library(marginaleffects)
+library(quickmatch)
+library(kableExtra)
+library(car)
+library(vip)
+library(corrplot)
+library(ROCR)
+library(psych)
+library(faraway)
+library(neuralnet)
+library(mltools)
+library(lmtest)
+library(tseries)
+library(mclust)
+library(forecast)
+library(reshape2)
+library(kernlab)
+library(e1071)
+library(xgboost)
+library(yardstick)
+library(tune)
+library(randomForest)
+library(ggcorrplot)
+library(tidyverse)
+library(FactoMineR)  
+library(factoextra)
+library(cluster)   
+library(gridExtra)   
+library(NbClust)     
+```
+
+
+# Introduction
+
+__Perspective:__ \ 
+
+Since 2020, I have been working in the mental health field, specifically in residential treatment for at-risk youth. I've always been passionate about mental health and hope to find a role that combines this passion with my skills and expertise in analytics and statistics. This assignment provided a great opportunity to explore mental health datasets and examine the risk factors that may influence overall mental well-being.
+
+For this analysis, I assumed the perspective of a data scientist working for a healthcare organization that specializing in mental health treatment. The goal is to better understand factors influencing mental health outcomes among diverse individuals and provide data-driven insights for targeted interventions. Insights from this analysis can guide mental health advocates and healthcare providers in developing programs that address common stressors and promote mental well-being.
+
+__Question:__ \ 
+
+Can we predict whether an individual reports a mental health condition based on demographic and lifestyle factors using different predictive models?
+
+__Models:__ \ 
+
+- Penalized Regression
+- SVM
+- Ensemble Methods - Boosting
+- Ensemble Methods - Bagging
+- Neural Networks 
+
+__Key Contributions:__\
+
+1. **Support Vector Machines (SVM)**  
+   SVM demonstrated limited predictive power with a testing accuracy of 0.45. Its contribution was minimal as it struggled to generalize patterns in the data.
+
+2. **Penalized Regression (LASSO)**  
+   LASSO provided stable but moderate performance with consistent accuracy of 0.515. It effectively identified key predictors such as age, work hours, and country through feature selection.
+
+3. **Boosting**  
+   Boosting mirrored LASSO’s results with consistent testing accuracy of 0.515, highlighting the robustness of the identified predictors without offering notable improvements.
+
+4. **Bagging**  
+   Bagging achieved perfect training accuracy (1.0) but testing accuracy of 0.495 revealed overfitting, limiting its usefulness for generalization.
+
+5. **Neural Networks**  
+   Neural networks performed best on the training data (accuracy of 0.735) but showed moderate testing accuracy (0.515), indicating overfitting. Despite this, neural networks captured complex, non-linear relationships, complementing insights from LASSO.
+
+
+__Conclusions:__\
+
+Did all methods support your conclusions or did some provide conflicting results? If so they provided conflicting results, how did you reconcile the differences?
+
+Most methods, particularly LASSO, boosting, and neural networks, supported the primary conclusions by consistently identifying age, work hours, and country as key predictors. However, SVM and bagging showed less reliable results due to overfitting and lower testing accuracy.  
+
+To reconcile these differences, the analysis focused on models with consistent testing performance and robust feature selection, such as LASSO and neural networks. This ensured the findings were validated by methods demonstrating generalizability, providing confidence in the conclusions.
+
+
+__Data Source and Description:__ \ 
+
+Source: [Kaggle](https://www.kaggle.com/datasets/bhadramohit/mental-health-dataset/data)
+
+The dataset consists of simulated mental health information for 1000 individuals across various countries, professions, and lifestyles. 
+
+```{r data table, echo=FALSE}
+
+# Create a data frame with variable descriptions
+data_description <- data.frame(
+  Variable = c("Mental_Health_Condition", "Age", "Gender", "Occupation", "Country", 
+               "Severity", "Consultation_History", "Stress_Level", 
+               "Sleep_Hours", "Work_Hours", "Physical_Activity_Hours"),
+  Type = c("Binary", "Numeric", "Categorical", "Categorical", "Categorical", 
+           "Categorical", "Categorical", "Categorical", 
+           "Numeric", "Numeric", "Numeric"),
+  Description = c("Target variable: presence of mental health condition (Yes, No)",
+                  "Age of the individual",
+                  "Gender of the individual (Male, Female, Non-binary)",
+                  "Occupation of the individual (IT, Healthcare, Education, etc.)",
+                  "Country of residence (USA, India, UK, Canada, Australia)",
+                  "Severity of mental health condition (None, Low, Medium, High)",
+                  "Consultation history with a mental health professional (Yes, No)",
+                  "Stress level (Low, Medium, High)",
+                  "Average hours of sleep per day",
+                  "Average hours of work per week",
+                  "Average physical activity hours per week")
+)
+
+# Render the table with kable and add styling with kableExtra
+kable(data_description, 
+      caption = "Table 1: Data Description", 
+      col.names = c("Variable", "Type", "Description"),
+      align = "l") %>%
+  kable_styling(full_width = F, bootstrap_options = c("striped", "hover", "condensed", "responsive")) %>%
+  row_spec(0, bold = TRUE, color = "white", background = "grey") %>%  # Header styling
+  column_spec(1, bold = TRUE) %>%  # Bold the first column
+  column_spec(2, width = "10em") %>%  # Set column width for "Type"
+  column_spec(3, width = "25em")  # Set column width for "Description"
+
+```
+
+# Read Data
+```{r load datasets, warning=FALSE}
+# Load data sets and clean variables
+cloud_wd <- "/Users/madelinelee/Downloads"
+setwd(cloud_wd)
+
+mh <- read.csv("mental_health_dataset.csv")
+
+# Convert categorical variables to factors
+mh <- mh %>%
+  mutate(across(c(Gender, Occupation, Country, Mental_Health_Condition, 
+                  Severity, Consultation_History, Stress_Level), as.factor))
+
+# Remove ID column for analysis
+mh <- mh %>%
+  select(-User_ID)
+
+# Check for missing values
+colSums(is.na(mh))
+
+
+head(mh)
+str(mh)
+```
+
+# EDA
+
+## Summary Statistics for Numeric and Categorical Variables
+```{r summary stats}
+# Summary for numeric variables
+summary(mh %>% select(Age, Sleep_Hours, Work_Hours, Physical_Activity_Hours))
+
+# Summary for categorical variables
+mh %>%
+  select(Gender, Occupation, Country, Mental_Health_Condition, Severity, Consultation_History, Stress_Level) %>%
+  summarise_all(~n_distinct(.))
+
+```
+
+## Distribution of Numerical Variables
+
+```{r numeric dist}
+# Histograms for numeric variables
+ggplot(mh, aes(x = Age)) +
+  geom_histogram(binwidth = 5, fill = "blue", color = "white") +
+  labs(title = "Distribution of Age", x = "Age", y = "Frequency")
+
+ggplot(mh, aes(x = Sleep_Hours)) +
+  geom_histogram(binwidth = 1, fill = "green", color = "white") +
+  labs(title = "Distribution of Sleep Hours", x = "Sleep Hours", y = "Frequency")
+
+ggplot(mh, aes(x = Work_Hours)) +
+  geom_histogram(binwidth = 5, fill = "orange", color = "white") +
+  labs(title = "Distribution of Work Hours", x = "Work Hours", y = "Frequency")
+
+ggplot(mh, aes(x = Physical_Activity_Hours)) +
+  geom_histogram(binwidth = 1, fill = "purple", color = "white") +
+  labs(title = "Distribution of Physical Activity Hours", x = "Physical Activity Hours", y = "Frequency")
+
+# Boxplots for numeric variables
+ggplot(mh, aes(y = Age)) +
+  geom_boxplot(fill = "blue") +
+  labs(title = "Boxplot of Age", y = "Age")
+
+ggplot(mh, aes(y = Sleep_Hours)) +
+  geom_boxplot(fill = "green") +
+  labs(title = "Boxplot of Sleep Hours", y = "Sleep Hours")
+
+ggplot(mh, aes(y = Work_Hours)) +
+  geom_boxplot(fill = "orange") +
+  labs(title = "Boxplot of Work Hours", y = "Work Hours")
+
+ggplot(mh, aes(y = Physical_Activity_Hours)) +
+  geom_boxplot(fill = "purple") +
+  labs(title = "Boxplot of Physical Activity Hours", y = "Physical Activity Hours")
+
+```
+
+
+## Distribution of Categorical Variables
+
+```{r}
+# Bar plots for categorical variables
+ggplot(mh, aes(x = Gender)) +
+  geom_bar(fill = "lightblue") +
+  labs(title = "Distribution of Gender", x = "Gender", y = "Count")
+
+ggplot(mh, aes(x = Occupation)) +
+  geom_bar(fill = "lightgreen") +
+  labs(title = "Distribution of Occupation", x = "Occupation", y = "Count") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+ggplot(mh, aes(x = Stress_Level)) +
+  geom_bar(fill = "gold") +
+  labs(title = "Distribution of Stress Level", x = "Stress Level", y = "Count")
+
+```
+
+## Target Distribution and Balance
+```{r target distrubution}
+ggplot(mh, aes(x = Mental_Health_Condition)) +
+  geom_bar(fill = "grey") +
+  labs(
+    title = "Distribution of Mental Health Condition",
+    x = "Mental Health Condition",
+    y = "Count"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+mh %>%
+  group_by(Mental_Health_Condition) %>%
+  summarise(Count = n()) %>%
+  mutate(Percentage = (Count / sum(Count)) * 100)
+
+
+```
+
+Data appears balanced with 48.5% reporting no mental health condition and 51.5% reporting a mental health condition. This means we do not need to adjust for imbalanced data with up or downsampling with training the model.
+
+## Correlation Analysis
+
+```{r numeric correlation}
+numeric_vars <- mh %>% select(Age, Sleep_Hours, Work_Hours, Physical_Activity_Hours)
+correlation_matrix <- cor(numeric_vars)
+ggcorrplot(correlation_matrix, lab = TRUE)
+```
+
+None of the numeric predictors have a strong correlation (all below +- .05)
+
+## Bivariate Analysis
+```{r bivariate}
+# Boxplots to see how numeric variables relate to mental health condition
+ggplot(mh, aes(x = Mental_Health_Condition, y = Age, fill = Mental_Health_Condition)) +
+  geom_boxplot() +
+  labs(title = "Mental Health Condition vs Age", x = "Mental Health Condition", y = "Age")
+
+ggplot(mh, aes(x = Mental_Health_Condition, y = Sleep_Hours, fill = Mental_Health_Condition)) +
+  geom_boxplot() +
+  labs(title = "Mental Health Condition vs Sleep Hours", x = "Mental Health Condition", y = "Sleep Hours")
+
+ggplot(mh, aes(x = Mental_Health_Condition, y = Work_Hours, fill = Mental_Health_Condition)) +
+  geom_boxplot() +
+  labs(title = "Mental Health Condition vs Work Hours", x = "Mental Health Condition", y = "Work Hours")
+
+ggplot(mh, aes(x = Mental_Health_Condition, y = Physical_Activity_Hours)) +
+  geom_boxplot(fill = "grey") +
+  labs(
+    title = "Mental Health Condition vs Physical Activity Hours",
+    x = "Mental Health Condition",
+    y = "Physical Activity Hours"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+There seems to be no major differences in numeric predictors between individuals that did and did not report a mental health condition.
+
+# Data Splitting
+
+```{r data split - 1}
+# Set a seed for reproducibility
+set.seed(123)
+
+# Use createDataPartition to create a training index
+train_index <- createDataPartition(mh$Mental_Health_Condition, p = 0.8, list = FALSE)
+
+# Subset data into training and testing sets
+train <- mh[train_index, ]
+test <- mh[-train_index, ]
+
+# Display the sizes of each dataset
+cat("Training set size:", nrow(train), "\n")
+cat("Testing set size:", nrow(test), "\n")
+
+train_outcome <- train[, 5]
+test_outcome <- test[, 5]
+
+# Create dummy variables for categorical predictors
+train_dummy <- dummyVars("~ .", data = train[, -5])
+train_predictor <- predict(train_dummy, newdata = train[, -5])
+test_predictor <- predict(train_dummy, newdata = test[, -5])
+
+# Scale the predictors
+train_predictor_scaled <- scale(train_predictor)
+test_predictor_scaled <- scale(test_predictor, 
+  center = attr(train_predictor_scaled, "scaled:center"), 
+  scale = attr(train_predictor_scaled, "scaled:scale"))
+
+# Convert outcome to binary (1 for "yes", 0 for "no")
+train_outcome <- ifelse(train_outcome == "Yes", 1, 0)
+test_outcome <- ifelse(test_outcome == "Yes", 1, 0)
+```
+
+# SVM
+
+Scale
+
+```{r scale}
+# Scale the predictors after creating the recipe
+train_predictor_scaled <- scale(train_predictor)
+test_predictor_scaled <- scale(test_predictor, 
+  center = attr(train_predictor_scaled, "scaled:center"), 
+  scale = attr(train_predictor_scaled, "scaled:scale"))
+```
+
+
+Train
+
+```{r train}
+svm_model <- svm(
+  x = train_predictor_scaled,
+  y = as.factor(train_outcome),
+  kernel = "linear",  # Using a linear kernel for simplicity
+  cross = 5            # 5-fold cross-validation
+)
+# Print the SVM model summary
+print(summary(svm_model))
+```
+
+
+
+Predict on Train
+
+```{r predict train}
+# Predict on the training set with SVM
+y_train_pred_svm <- predict(svm_model, newdata = train_predictor_scaled)
+train_accuracy_svm <- mean(y_train_pred_svm == train_outcome)
+```
+
+Predict on Test
+
+```{r predict test}
+# Predict on the test set with SVM
+y_pred_svm <- predict(svm_model, newdata = test_predictor_scaled)
+accuracy_svm <- mean(y_pred_svm == test_outcome)
+
+
+cat("SVM Model\n")
+cat("Training Accuracy:", round(train_accuracy_svm, 3), "\n")
+cat("Testing Accuracy:", round(accuracy_svm, 3), "\n\n")
+```
+# Penalized Regression
+
+Train Model
+```{r penalized regression model}
+# Train a penalized regression model (LASSO)
+lasso_model <- cv.glmnet(
+  x = as.matrix(train_predictor_scaled),
+  y = train_outcome,
+  alpha = 1,  # LASSO regression
+  family = "binomial"  # Binary outcome
+) 
+```
+
+Lambda
+```{r best lamda}
+# Print the best lambda value for LASSO
+print(paste("Best lambda for LASSO:", lasso_model$lambda.min))
+
+```
+
+Predict on Train
+```{r predict on train - pr}
+# Predict on the training set with LASSO
+y_train_pred_lasso <- predict(lasso_model, newx = as.matrix(train_predictor_scaled), s = "lambda.min", type = "class")
+train_accuracy_lasso <- mean(y_train_pred_lasso == train_outcome)
+```
+
+Predict on Test
+```{r predict on test - pr}
+# Predict on the test set with LASSO
+y_pred_lasso <- predict(lasso_model, newx = as.matrix(test_predictor_scaled), s = "lambda.min", type = "class")
+accuracy_lasso <- mean(y_pred_lasso == test_outcome)
+
+# Print results
+cat("LASSO Model\n")
+cat("Training Accuracy:", round(train_accuracy_lasso, 3), "\n")
+cat("Testing Accuracy:", round(accuracy_lasso, 3), "\n\n")
+```
+
+# Ensemble Methods - Bagging
+
+Model set up w/ Hyperparamter Tuning
+
+```{r bagging}
+# Define the Random Forest model specification with tunable hyperparameters
+rf_spec <- rand_forest(
+  trees = tune(),        # Number of trees
+  mtry = tune(),         # Number of predictors to randomly sample
+  min_n = tune()         # Minimum number of data points in a node
+) %>%
+  set_engine("randomForest") %>%
+  set_mode("classification")
+
+# Define the grid for hyperparameter tuning
+rf_grid <- grid_regular(
+  trees(range = c(200, 500)),
+  mtry(range = c(2, round(sqrt(ncol(train))))),
+  min_n(range = c(1, 20)),
+  levels = 10
+)
+
+```
+
+
+Cross-Validation and Hyperparameter Tuning
+
+
+```{r recipe - bagging}
+# Create a recipe for data preprocessing
+rf_recipe <- recipe(Mental_Health_Condition ~ ., data = train) %>%
+  step_dummy(all_nominal_predictors()) %>%
+  step_zv(all_predictors())
+```
+
+
+```{r cv and tuning bagging}
+
+# Set up cross-validation
+folds <- vfold_cv(train, v = 5)
+
+# Tune the model with grid search and cross-validation
+rf_res <- tune_grid(
+  rf_spec,
+  preprocessor = rf_recipe,
+  resamples = folds,
+  grid = rf_grid,
+  metrics = metric_set(roc_auc)
+)
+
+# Get the best tuned parameters
+best_rf <- select_best(rf_res, metric = "roc_auc")
+
+
+```
+
+Train the Final Model w/ Best Parameters 
+
+```{r train - bagging}
+# Finalize the model with the best hyperparameters
+final_rf <- finalize_model(rf_spec, best_rf)
+
+# Train the model on the full training data
+final_rf_fit <- final_rf %>%
+  fit(Mental_Health_Condition ~ ., data = train)
+
+# Make predictions on the training set and calculate accuracy
+train_predictions <- predict(final_rf_fit, train) %>%
+  bind_cols(train %>% select(Mental_Health_Condition))
+
+train_accuracy_bag <- train_predictions %>%
+  metrics(truth = Mental_Health_Condition, estimate = .pred_class) %>%
+  filter(.metric == "accuracy") %>%
+  .$`.estimate`
+
+
+```
+
+Evaluate the Model on the Test Set
+
+```{r test - bagging}
+# Make predictions on the test set
+rf_predictions <- predict(final_rf_fit, test, type = "prob") %>%
+  bind_cols(predict(final_rf_fit, test)) %>%
+  bind_cols(test %>% select(Mental_Health_Condition))
+
+# calculate accuracy
+test_accuracy_bag <- rf_predictions %>%
+  metrics(truth = Mental_Health_Condition, estimate = .pred_class) %>%
+  filter(.metric == "accuracy") %>%
+  .$`.estimate`
+
+# Print results
+cat("Bagging Model\n")
+cat("Training Accuracy:", round(train_accuracy_bag, 3), "\n")
+cat("Testing Accuracy:", round(test_accuracy_bag , 3), "\n\n")
+
+```
+
+
+# Ensemble Methods - Boosting
+
+Regularization
+
+Try adding regularization to prevent overfitting and improve model performance
+
+```{r regularization}
+xgb_spec_reg <- boost_tree(
+  trees = tune(),
+  tree_depth = tune(),
+  learn_rate = tune(),
+  loss_reduction = tune(),
+  sample_size = tune(),
+  mtry = tune(),
+  min_n = tune()
+) %>%
+  set_engine("xgboost", lambda = 1, alpha = 1) %>%
+  set_mode("classification")
+
+# Define the tuning grid
+xgb_grid_reg <- grid_latin_hypercube(
+  trees(range = c(50, 300)),
+  tree_depth(range = c(3, 10)),
+  learn_rate(range = c(0.01, 0.3)),
+  loss_reduction(),
+  sample_prop(range = c(0.6, 1.0)),
+  finalize(mtry(), train),
+  min_n(range = c(1, 10)),
+  size = 20
+)
+
+# Create the recipe for data preprocessing
+xgb_recipe <- recipe(Mental_Health_Condition ~ ., data = train) %>%
+  step_dummy(all_nominal_predictors()) %>%
+  step_zv(all_predictors())
+
+# Set up 5-fold cross-validation on the training set
+folds <- vfold_cv(train, v = 5)
+
+# Tune the model with cross-validation
+xgb_res_reg <- tune_grid(
+  xgb_spec_reg,
+  preprocessor = xgb_recipe,
+  resamples = folds,
+  grid = xgb_grid_reg,
+  metrics = metric_set(roc_auc)
+)
+
+# Select the best hyperparameters based on AUC
+best_xgb_reg <- select_best(xgb_res_reg, metric = "roc_auc")
+
+# Finalize the model specification with the best hyperparameters
+final_xgb_spec_reg <- finalize_model(xgb_spec_reg, best_xgb_reg)
+
+# Fit the final model on the entire training set
+final_xgb_fit_reg <- final_xgb_spec_reg %>%
+  fit(Mental_Health_Condition ~ ., data = train)
+
+# Predict on the training set
+train_predictions <- predict(final_xgb_fit_reg, train, type = "class") %>%
+  bind_cols(train %>% select(Mental_Health_Condition))
+
+train_accuracy_boost <- mean(train_predictions$.pred_class == train_predictions$Mental_Health_Condition)
+
+# Predict on the test set
+test_predictions <- predict(final_xgb_fit_reg, test, type = "class") %>%
+  bind_cols(test %>% select(Mental_Health_Condition))
+
+test_accuracy_boost <- mean(test_predictions$.pred_class == test_predictions$Mental_Health_Condition)
+
+# Print results
+cat("Boosting Model\n")
+cat("Training Accuracy:", round(train_accuracy_boost, 3), "\n")
+cat("Testing Accuracy:", round(test_accuracy_boost, 3), "\n\n")
+
+```
+
+
+# Neural Networks
+
+Data Splitting
+
+```{r data split}
+# Set a seed for reproducibility
+set.seed(123)
+
+# Use createDataPartition to create a training index
+train_index <- createDataPartition(mh$Mental_Health_Condition, p = 0.8, list = FALSE)
+
+# Subset data into training and testing sets
+train <- mh[train_index, ]
+test <- mh[-train_index, ]
+
+# Display the sizes of each dataset
+cat("Training set size:", nrow(train), "\n")
+cat("Testing set size:", nrow(test), "\n")
+
+train_predictor <- train[,-5]
+train_outcome <- train [,5]
+test_predictor <- test[,-5]
+test_outcome <- test [,5]
+```
+
+Cross Validation
+```{r cv}
+ctrl <- trainControl(method = "repeatedcv", # cross-validation
+  number = 5, # 5 folds
+  repeats = 5,
+  classProbs = TRUE # report class probability
+)
+```
+
+NN Model
+```{r tuning}
+avnnetGrid <- expand.grid(decay = c(.001,.005),
+  size = c(15:35),
+  bag = FALSE)
+
+avnnet_fit <- train(train_predictor, train_outcome,
+  method = "avNNet",
+  tuneGrid = avnnetGrid,
+  trControl = ctrl,
+  softmax = TRUE,
+  reProc = c("center", "scale"),
+  trace = FALSE,
+  metric= "Accuracy",
+  allowParallel=TRUE,
+  maxit = 50)
+
+plot(avnnet_fit)
+```
+
+Predicting on train and test
+```{r predict}
+# Predict on training data
+train_predictions <- predict(avnnet_fit, train_predictor)
+train_accuracy <- mean(train_predictions == train_outcome)
+
+# Predict on testing data
+test_predictions <- predict(avnnet_fit, test_predictor)
+test_accuracy <- mean(test_predictions == test_outcome)
+
+# Print results
+cat("Nueral Network Model\n")
+cat("Training Accuracy:", round(train_accuracy, 3), "\n")
+cat("Testing Accuracy:", round(test_accuracy, 3), "\n")
+
+```
+
+Confusion Matrix
+
+```{r confusion matrix}
+# Generate confusion matrix for testing data
+# Generate confusion matrix for training data
+train_confusion_matrix <- table(Predicted = train_predictions, Actual = train_outcome)
+test_confusion_matrix <- table(Predicted = test_predictions, Actual = test_outcome)
+cat("Confusion Matrix - Training Data:\n")
+print(train_confusion_matrix)
+
+cat("\nConfusion Matrix - Testing Data:\n")
+print(test_confusion_matrix)
+```
+Feature Importance
+
+```{r feature importance}
+
+# Function to calculate permutation importance
+calculate_permutation_importance_avnnet <- function(model, test_X, test_y) {
+  # Base predictions and accuracy
+  base_predictions <- predict(model, test_X)
+  base_accuracy <- mean(base_predictions == test_y)
+  
+  # Calculate importance for each feature
+  feature_importances <- sapply(1:ncol(test_X), function(i) {
+    # Permute one feature
+    permuted_X <- test_X
+    permuted_X[, i] <- sample(permuted_X[, i])
+    
+    # Predictions with permuted feature
+    permuted_predictions <- predict(model, permuted_X)
+    permuted_accuracy <- mean(permuted_predictions == test_y)
+    
+    # Importance as drop in accuracy
+    base_accuracy - permuted_accuracy
+  })
+  
+  names(feature_importances) <- colnames(test_X)
+  return(feature_importances)
+}
+
+# Use your testing dataset for evaluation
+feature_importances <- calculate_permutation_importance_avnnet(avnnet_fit, test_predictor, test_outcome)
+
+# Sort and display feature importances
+feature_importances <- sort(feature_importances, decreasing = TRUE)
+print(feature_importances)
+
+# Visualize feature importance with smaller text
+barplot(
+  feature_importances,
+  names.arg = c("Age", "Country", "Work_Hours", "Physical_Activity_Hours", 
+                "Gender", "Occupation", "Consultation_History", "Severity", 
+                "Stress_Level", "Sleep_Hours"),
+  main = "Feature Importance for avNNet Model",
+  horiz = TRUE,
+  col = "grey",
+  las = 1,
+  cex.axis = 0.6,
+  cex.lab = .6,
+  cex.names = 0.35,  # Reduce text size for y-axis labels
+  xlab = "Importance (Drop in Accuracy)"
+)
+
+```
+
+
